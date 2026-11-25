@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../config/kitt_persona.dart';
@@ -46,6 +47,7 @@ class _HomePageState extends State<HomePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _setWakelock(true);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _setWakelock(false);

@@ -5,11 +5,13 @@ import 'pages/splash_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
       systemNavigationBarColor: Color(0xFF050507),
+      systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
   runApp(const KittGeminiApp());
