@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../config/kitt_persona.dart';
 import '../managers/home_controller.dart';
+import '../models/aux_slot_config.dart';
 import '../models/kitt_state.dart';
+import '../widgets/aux_buttons_bar.dart';
+import '../widgets/gadget_overlay.dart';
+import '../widgets/gadget_panel.dart';
+import '../widgets/kitt_dialer_modal.dart';
+import '../widgets/kitt_scanner_overlay.dart';
 import '../widgets/kitt_visualizer.dart';
 import '../widgets/side_button.dart';
+import '../widgets/surveillance_radar.dart';
+import 'aux_slot_config_page.dart';
 
 /// Painel principal do KITT (retrato e paisagem) integrado à Gemini Live API.
 class HomePage extends StatefulWidget {
@@ -14,18 +23,52 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final HomeController _controller;
+  late final AnimationController _alertPulseController;
+  bool _standbyScannerActive = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _setWakelock(true);
     _controller = HomeController();
+    _alertPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    )..repeat(reverse: true);
     _controller.initAndConnect();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _setWakelock(true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _setWakelock(false);
+    }
+  }
+
+  Future<void> _setWakelock(bool enable) async {
+    try {
+      if (enable) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (_) {
+      // Ignora em ambientes de teste sem canal nativo.
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _setWakelock(false);
+    _alertPulseController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -33,87 +76,228 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: Listenable.merge(<Listenable>[
+        _controller,
+        _alertPulseController,
+      ]),
       builder: (BuildContext context, _) {
+        final bool isPursuit = _controller.driveMode == DriveMode.pursuit;
+        final bool isSurveillance =
+            _controller.driveMode == DriveMode.surveillance;
+        final double pulse = _alertPulseController.value;
+
+        final Color scaffoldBg = isPursuit
+            ? Color.lerp(
+                const Color(0xFF0E0305),
+                const Color(0xFF1D0608),
+                pulse,
+              )!
+            : isSurveillance
+                ? const Color(0xFF040B0D)
+                : const Color(0xFF050507);
+
         return Scaffold(
-          backgroundColor: const Color(0xFF050507),
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: <Widget>[
-                  _buildTopStatusBar(),
-                  const SizedBox(height: 12),
-                  if (_controller.errorMessage != null) _buildErrorBanner(),
-                  if (_controller.activeAction != null) _buildActiveActionBar(),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (BuildContext context, BoxConstraints c) {
-                        final bool isWide = c.maxWidth >= 600;
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: <Widget>[
-                            SizedBox(
-                              width: isWide ? 140 : 94,
-                              child: _buildLeftColumn(),
-                            ),
-                            Expanded(
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: <Widget>[
-                                    KittVisualizer(
-                                      levelListenable: _controller.voiceLevel,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Text(
-                                      _controller.driveMode.label,
-                                      style: const TextStyle(
-                                        color: Color(0xFFFFD54F),
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 13,
-                                        letterSpacing: 2.2,
-                                      ),
-                                    ),
-                                    if (_controller.lastTranscript.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 8,
-                                          left: 12,
-                                          right: 12,
-                                        ),
-                                        child: Text(
-                                          _controller.lastTranscript,
-                                          textAlign: TextAlign.center,
-                                          maxLines: 3,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Color(0xFFB5B5C2),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: isWide ? 140 : 94,
-                              child: _buildRightColumn(),
-                            ),
-                          ],
-                        );
-                      },
+          backgroundColor: scaffoldBg,
+          body: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              // Borda pulsante vermelho/âmbar em Pursuit Mode
+              if (isPursuit)
+                IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Color.lerp(
+                          const Color(0xFFFF1744),
+                          const Color(0xFFFFAB00),
+                          pulse,
+                        )!
+                            .withValues(alpha: 0.65 + pulse * 0.35),
+                        width: 4.0,
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: const Color(0xFFFF1744)
+                              .withValues(alpha: 0.16 + pulse * 0.18),
+                          blurRadius: 28,
+                          spreadRadius: 2,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildBottomControlBar(),
-                ],
+                ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: <Widget>[
+                      _buildTopStatusBar(),
+                      if (isPursuit) _buildPursuitHudBadge(pulse),
+                      const SizedBox(height: 8),
+                      if (_controller.errorMessage != null) _buildErrorBanner(),
+                      if (_controller.activeAction != null)
+                        _buildActiveActionBar(),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (BuildContext context, BoxConstraints c) {
+                            final bool isWide = c.maxWidth >= 600;
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: <Widget>[
+                                SizedBox(
+                                  width: isWide ? 140 : 94,
+                                  child: _buildLeftColumn(),
+                                ),
+                                Expanded(
+                                  child: Center(
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          if (isSurveillance) ...<Widget>[
+                                            const SurveillanceRadar(size: 162),
+                                            const SizedBox(height: 8),
+                                            KittVisualizer(
+                                              levelListenable:
+                                                  _controller.voiceLevel,
+                                              compact: true,
+                                            ),
+                                          ] else
+                                            KittVisualizer(
+                                              levelListenable:
+                                                  _controller.voiceLevel,
+                                              pursuitMode: isPursuit,
+                                            ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            _controller.driveMode.label,
+                                            style: TextStyle(
+                                              color: isPursuit
+                                                  ? const Color(0xFFFF5252)
+                                                  : isSurveillance
+                                                      ? const Color(0xFF4DD0E1)
+                                                      : const Color(0xFFFFD54F),
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12.5,
+                                              letterSpacing: 2.0,
+                                            ),
+                                          ),
+                                          if (_controller
+                                              .lastTranscript.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
+                                                left: 10,
+                                                right: 10,
+                                              ),
+                                              child: Text(
+                                                _controller.lastTranscript,
+                                                textAlign: TextAlign.center,
+                                                maxLines: 3,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Color(0xFFB5B5C2),
+                                                  fontSize: 11.5,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: isWide ? 140 : 94,
+                                  child: _buildRightColumn(),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      GadgetPanel(
+                        activeGadget: _controller.activeGadget,
+                        rpmNormalized: _controller.rpmNormalized,
+                        rpmValue: _controller.rpmValue,
+                        speedKmh: _controller.displaySpeedKmh,
+                        isGpsLive: _controller.isGpsLive,
+                        currentGForce: _controller.currentGForce,
+                        telemetryEnabled:
+                            _controller.telemetryAutoCommentsEnabled,
+                        onToggleTelemetry: _controller.toggleTelemetrySensors,
+                        onTriggerGadget: _controller.activateGadget,
+                      ),
+                      const SizedBox(height: 8),
+                      AuxButtonsBar(
+                        slots: _controller.auxSlots,
+                        onTapSlot: _handleAuxTap,
+                        onLongPressSlot: _openAuxSlotConfig,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildBottomControlBar(),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              if (_controller.activeGadget != null)
+                GadgetOverlay(
+                  gadget: _controller.activeGadget!,
+                  runId: _controller.gadgetRunId,
+                ),
+              if (_standbyScannerActive)
+                KittScannerOverlay(
+                  voiceLevelListenable: _controller.voiceLevel,
+                  onWake: () => setState(() => _standbyScannerActive = false),
+                  onWakeWithMic: () {
+                    setState(() => _standbyScannerActive = false);
+                    if (!_controller.isMicActive) {
+                      _controller.toggleMic();
+                    }
+                  },
+                ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPursuitHudBadge(double pulse) {
+    final bool bright = pulse >= 0.45;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bright ? const Color(0x55FF1744) : const Color(0x22FFAB00),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: bright ? const Color(0xFFFF1744) : const Color(0xFFFFAB00),
+          width: 1.6,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 16,
+            color: bright ? const Color(0xFFFFEA00) : const Color(0xFFFF5252),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'PURSUIT ENGAGED',
+            style: TextStyle(
+              fontFamily: 'monospace',
+              color: bright ? Colors.white : const Color(0xFFFFAB00),
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: 3.0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -148,6 +332,15 @@ class _HomePageState extends State<HomePage> {
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Modo Stand-by / Scanner Frontal',
+          onPressed: () => setState(() => _standbyScannerActive = true),
+          icon: const Icon(
+            Icons.linear_scale,
+            color: Color(0xFFFF2424),
+            size: 20,
           ),
         ),
         IconButton(
@@ -229,17 +422,28 @@ class _HomePageState extends State<HomePage> {
           label: 'AUTO\nCRUISE',
           accentColor: const Color(0xFFFFB300),
           isActive: _controller.driveMode == DriveMode.autoCruise,
-          onPressed: () => _controller.setDriveMode(
+          onPressed: () => _controller.setOperationMode(
             DriveMode.autoCruise,
             announceToGemini: true,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
+        SideButton(
+          label: 'SURVEIL-\nLANCE',
+          accentColor: const Color(0xFF00E5FF),
+          compact: true,
+          isActive: _controller.driveMode == DriveMode.surveillance,
+          onPressed: () => _controller.setOperationMode(
+            DriveMode.surveillance,
+            announceToGemini: true,
+          ),
+        ),
+        const SizedBox(height: 8),
         SideButton(
           label: 'PURSUIT',
           accentColor: const Color(0xFFFF2424),
           isActive: _controller.driveMode == DriveMode.pursuit,
-          onPressed: () => _controller.setDriveMode(
+          onPressed: () => _controller.setOperationMode(
             DriveMode.pursuit,
             announceToGemini: true,
           ),
@@ -345,6 +549,18 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(width: 10),
         IconButton.filled(
+          tooltip: 'Commlink • Discador telefônico KITT',
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFF1A1A22),
+            foregroundColor: const Color(0xFF00E676),
+            padding: const EdgeInsets.all(14),
+            side: const BorderSide(color: Color(0xFF1B5E20)),
+          ),
+          onPressed: _openDialerModal,
+          icon: const Icon(Icons.call),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filled(
           tooltip: 'Enviar comando de texto de teste',
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFF1A1A22),
@@ -355,6 +571,41 @@ class _HomePageState extends State<HomePage> {
           icon: const Icon(Icons.keyboard),
         ),
       ],
+    );
+  }
+
+  Future<void> _handleAuxTap(AuxSlotConfig slot) async {
+    if (!slot.isConfigured) {
+      await _openAuxSlotConfig(slot);
+      return;
+    }
+    await _controller.launchAuxApp(slotNumber: slot.slotNumber);
+  }
+
+  Future<void> _openAuxSlotConfig(AuxSlotConfig slot) async {
+    final AuxSlotConfig? updated =
+        await Navigator.of(context).push<AuxSlotConfig>(
+      MaterialPageRoute<AuxSlotConfig>(
+        builder: (_) => AuxSlotConfigPage(
+          initialConfig: slot,
+          loadInstalledApps: _controller.listInstalledApps,
+        ),
+      ),
+    );
+    if (updated != null) {
+      await _controller.saveAuxSlot(updated);
+    }
+  }
+
+  Future<void> _openDialerModal() async {
+    await showKittDialerModal(
+      context: context,
+      onDial: (String phoneNumber, bool directCall) async {
+        await _controller.makePhoneCall(
+          phoneNumber: phoneNumber,
+          directCall: directCall,
+        );
+      },
     );
   }
 

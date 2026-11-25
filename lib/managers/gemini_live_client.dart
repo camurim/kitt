@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/kitt_persona.dart';
+import '../models/aux_slot_config.dart';
 import '../models/kitt_state.dart';
 
 /// Cliente WebSocket para a Gemini Live API (BidiGenerateContent).
@@ -45,6 +46,7 @@ class GeminiLiveClient {
     required String model,
     required KittPersonaConfig persona,
     required DriveMode currentMode,
+    List<AuxSlotConfig> auxSlots = const <AuxSlotConfig>[],
   }) async {
     await disconnect();
 
@@ -105,7 +107,10 @@ class GeminiLiveClient {
           'systemInstruction': <String, dynamic>{
             'parts': <Map<String, dynamic>>[
               <String, dynamic>{
-                'text': persona.buildSystemInstruction(currentMode),
+                'text': persona.buildSystemInstruction(
+                  currentMode,
+                  auxSlots: auxSlots,
+                ),
               },
             ],
           },
@@ -143,7 +148,7 @@ class GeminiLiveClient {
   }
 
   /// Envia um turno de texto (útil para testes sem microfone ou botões rápidos).
-  void sendTextMessage(String text) {
+  void sendTextMessage(String text, {bool turnComplete = true}) {
     if (_channel == null || text.trim().isEmpty) return;
     _sendJson(<String, dynamic>{
       'clientContent': <String, dynamic>{
@@ -155,9 +160,15 @@ class GeminiLiveClient {
             ],
           },
         ],
-        'turnComplete': true,
+        'turnComplete': turnComplete,
       },
     });
+  }
+
+  /// Injeta contexto silencioso na sessão ativa da Gemini Live API (`turnComplete: false`)
+  /// para ajustar o tom/comportamento do KITT sem disparar uma resposta imediata.
+  void sendSilentContext(String contextInstruction) {
+    sendTextMessage(contextInstruction, turnComplete: false);
   }
 
   /// Devolve o resultado de uma chamada de função para o Gemini continuar a fala.
