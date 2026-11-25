@@ -21,6 +21,7 @@ class AudioEngineManager {
   AudioSession? _audioSession;
   bool _pcmInitialized = false;
   bool _focusActive = false;
+  bool _listeningActive = false;
   Timer? _decayTimer;
   Timer? _focusReleaseTimer;
 
@@ -110,10 +111,26 @@ class AudioEngineManager {
     } catch (_) {}
   }
 
-  void _scheduleFocusRelease() {
+  /// Adquire foco de áudio transitório com ducking (`gainTransientMayDuck`)
+  /// assim que o motorista inicia a fala (ex.: botão VOZ / INTERCOM no Android Auto),
+  /// abaixando suavemente Waze/Spotify enquanto o KITT escuta e responde.
+  Future<void> acquireListeningFocus() async {
+    _listeningActive = true;
+    await _acquireDuckingFocus();
+  }
+
+  /// Libera o estado de escuta ativa e agenda a devolução suave do foco de áudio
+  /// para Spotify/Waze assim que o KITT terminar de falar.
+  void releaseListeningFocus() {
+    _listeningActive = false;
+    _scheduleFocusRelease();
+  }
+
+  void _scheduleFocusRelease({Duration delay = const Duration(milliseconds: 650)}) {
     _focusReleaseTimer?.cancel();
-    _focusReleaseTimer = Timer(const Duration(milliseconds: 650), () async {
-      if (!_focusActive) return;
+    if (_listeningActive) return;
+    _focusReleaseTimer = Timer(delay, () async {
+      if (!_focusActive || _listeningActive) return;
       try {
         await _audioSession?.setActive(false);
       } catch (_) {}
@@ -172,9 +189,12 @@ class AudioEngineManager {
   /// Toca um efeito sonoro local opcional (ex.: `audio/pursuit.mp3`) com ducking.
   Future<void> playSfxAsset(String relativeAssetPath) async {
     try {
+      await _acquireDuckingFocus();
       await _sfxPlayer.stop();
       await _sfxPlayer.play(ap.AssetSource(relativeAssetPath));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 1800));
     } catch (_) {
+      _scheduleFocusRelease();
       // Asset opcional ausente — segue normalmente sem erro.
     }
   }
@@ -183,9 +203,11 @@ class AudioEngineManager {
   /// Tenta primeiro o asset MP3 opcional e, na ausência, sintetiza um burst
   /// retrô de estática/pulso EMP em memória (WAV PCM 16-bit).
   Future<void> playMicroJamInterferenceSfx() async {
+    await _acquireDuckingFocus();
     try {
       await _sfxPlayer.stop();
       await _sfxPlayer.play(ap.AssetSource('audio/micro_jam.mp3'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 1800));
       return;
     } catch (_) {
       // Fallback para síntese de interferência eletromagnética em memória.
@@ -195,7 +217,9 @@ class AudioEngineManager {
       final Uint8List wavBytes = buildInterferenceWavBytes();
       await _sfxPlayer.stop();
       await _sfxPlayer.play(ap.BytesSource(wavBytes, mimeType: 'audio/wav'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 1500));
     } catch (_) {
+      _scheduleFocusRelease();
       // Ignora em ambientes de teste sem canal nativo de áudio.
     }
   }

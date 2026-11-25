@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Raio de propulsão Turbo Boost -->
+    <path
+        android:fillColor="#FF2424"
+        android:pathData="M13.5,2 L4.5,13.5 H11 L9.5,22 L19.5,10 H13 Z" />
+    <!-- Contorno neon âmbar -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M13.5,2 L4.5,13.5 H11 L9.5,22 L19.5,10 H13 Z"
+        android:strokeWidth="1.0"
+        android:strokeColor="#FFD54F"
+        android:strokeLineJoin="round" />
+</vector>

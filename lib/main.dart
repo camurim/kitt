@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'managers/home_controller.dart';
 import 'pages/splash_page.dart';
 
 void main() {
@@ -14,6 +15,10 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+  // Inicia o HomeController + AndroidAutoBridgeService + Gemini Live imediatamente,
+  // garantindo funcionamento mesmo quando o FlutterEngine sobe em modo headless
+  // pelo Android Auto com a tela do celular apagada.
+  KittAppSession.ensureStarted();
   runApp(const KittGeminiApp());
 }
 

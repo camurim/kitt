@@ -38,7 +38,7 @@ class _HomePageState extends State<HomePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setWakelock(true);
-    _controller = HomeController();
+    _controller = KittAppSession.controller;
     _pageController = PageController();
     _alertPulseController = AnimationController(
       vsync: this,
@@ -76,7 +76,8 @@ class _HomePageState extends State<HomePage>
     _setWakelock(false);
     _pageController.dispose();
     _alertPulseController.dispose();
-    _controller.dispose();
+    // Não descarta _controller aqui pois ele é compartilhado com o Android Auto
+    // via KittAppSession e permanece ativo mesmo com a tela do celular apagada.
     super.dispose();
   }
 

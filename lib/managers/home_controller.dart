@@ -7,12 +7,28 @@ import 'package:flutter/services.dart';
 import '../config/kitt_persona.dart';
 import '../models/aux_slot_config.dart';
 import '../models/kitt_state.dart';
+import 'android_auto_bridge_service.dart';
 import 'audio_engine_manager.dart';
 import 'aux_apps_manager.dart';
 import 'gemini_live_client.dart';
 import 'mic_stream_manager.dart';
 import 'phone_call_manager.dart';
 import 'vehicle_telemetry_service.dart';
+
+/// Instância compartilhada do [HomeController] para sobreviver ao ciclo de vida
+/// entre a UI mobile (`HomePage`) e o modo headless do Android Auto.
+class KittAppSession {
+  KittAppSession._();
+
+  static HomeController? _sharedController;
+
+  static HomeController get controller =>
+      _sharedController ??= HomeController();
+
+  static Future<void> ensureStarted() async {
+    await controller.initAndConnect();
+  }
+}
 
 /// Controlador principal do painel KITT.
 ///
@@ -29,6 +45,7 @@ class HomeController extends ChangeNotifier {
     PhoneCallManager? phoneCallManager,
     AuxAppsManager? auxAppsManager,
     VehicleTelemetryService? telemetryService,
+    AndroidAutoBridgeService? androidAutoBridge,
     KittPersonaConfig initialPersona = const KittPersonaConfig(),
   })  : _liveClient = liveClient ?? GeminiLiveClient(),
         _audioEngine = audioEngine ?? AudioEngineManager(),
@@ -36,8 +53,10 @@ class HomeController extends ChangeNotifier {
         _phoneCallManager = phoneCallManager ?? PhoneCallManager(),
         _auxAppsManager = auxAppsManager ?? AuxAppsManager(),
         _telemetryService = telemetryService ?? VehicleTelemetryService(),
+        _androidAutoBridge = androidAutoBridge ?? AndroidAutoBridgeService(),
         _persona = initialPersona {
     _bindStreams();
+    _androidAutoBridge.attach(onCommand: handleAndroidAutoCommand);
   }
 
   final GeminiLiveClient _liveClient;
@@ -46,6 +65,7 @@ class HomeController extends ChangeNotifier {
   final PhoneCallManager _phoneCallManager;
   final AuxAppsManager _auxAppsManager;
   final VehicleTelemetryService _telemetryService;
+  final AndroidAutoBridgeService _androidAutoBridge;
 
   List<AuxSlotConfig> _auxSlots = AuxSlotConfig.defaultSlots();
 
@@ -173,7 +193,15 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _initialized = false;
+
   Future<void> initAndConnect() async {
+    if (_initialized) {
+      // Já inicializado (ex.: motor headless do Android Auto) — apenas ressincroniza estado.
+      notifyListeners();
+      return;
+    }
+    _initialized = true;
     _auxSlots = await _auxAppsManager.loadSlots();
     notifyListeners();
     await _audioEngine.init();
@@ -209,10 +237,12 @@ class HomeController extends ChangeNotifier {
       if (_connectionState == LiveConnectionState.error) return;
     }
 
+    await _audioEngine.acquireListeningFocus();
     final bool started = await _micManager.startStreaming(
       _liveClient.sendPcmAudioChunk,
     );
     if (!started) {
+      _audioEngine.releaseListeningFocus();
       _errorMessage = 'Permissão de microfone negada.';
       notifyListeners();
       return;
@@ -224,6 +254,7 @@ class HomeController extends ChangeNotifier {
 
   Future<void> stopMic() async {
     await _micManager.stopStreaming();
+    _audioEngine.releaseListeningFocus();
     if (_isMicActive) {
       _isMicActive = false;
       notifyListeners();
@@ -769,8 +800,52 @@ class HomeController extends ChangeNotifier {
     });
   }
 
+  /// Executa um comando acionado na interface nativa do Android Auto.
+  Future<void> handleAndroidAutoCommand(String command) async {
+    switch (command) {
+      case 'toggle_voice':
+        await toggleMic();
+        break;
+      case 'toggle_pursuit':
+        final DriveMode next = _driveMode == DriveMode.pursuit
+            ? DriveMode.normalCruise
+            : DriveMode.pursuit;
+        setOperationMode(next, announceToGemini: true);
+        break;
+      case 'toggle_surveillance':
+        final DriveMode next = _driveMode == DriveMode.surveillance
+            ? DriveMode.normalCruise
+            : DriveMode.surveillance;
+        setOperationMode(next, announceToGemini: true);
+        break;
+      case 'trigger_turbo_boost':
+        activateGadget(GadgetType.turboBoost);
+        break;
+      case 'trigger_oil_slick':
+        activateGadget(GadgetType.oilSlick);
+        break;
+      case 'trigger_smoke_screen':
+        activateGadget(GadgetType.smokeScreen);
+        break;
+      default:
+        break;
+    }
+  }
+
+  @override
+  void notifyListeners() {
+    _androidAutoBridge.syncState(
+      connectionState: _connectionState,
+      driveMode: _driveMode,
+      isMicActive: _isMicActive,
+      activeGadget: _activeGadget,
+    );
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _androidAutoBridge.dispose();
     _actionClearTimer?.cancel();
     _gadgetTimer?.cancel();
     _telemetryTimer?.cancel();
