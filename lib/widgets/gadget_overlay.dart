@@ -8,6 +8,9 @@ import '../models/kitt_state.dart';
 /// - Oil Slick: óleo viscoso escorrendo com reflexos metálicos/iridescentes
 /// - Smoke Screen: sistema de partículas de fumaça densa subindo e dissipando
 /// - Turbo Boost: linhas de velocidade nas bordas e brilho de propulsão
+/// - Micro Jam: pulsos eletromagnéticos circulares e distorção/estática retrô
+/// - Ski Mode: horizonte artificial inclinando a 45° com barras de equilíbrio âmbar/vermelho
+/// - Scanner: feixe laser horizontal varrendo de cima a baixo com grades táticas e telemetria
 class GadgetOverlay extends StatefulWidget {
   const GadgetOverlay({
     super.key,
@@ -66,12 +69,98 @@ class _GadgetOverlayState extends State<GadgetOverlay>
                   GadgetType.oilSlick => _OilSlickPainter(progress: p),
                   GadgetType.smokeScreen => _SmokeScreenPainter(progress: p),
                   GadgetType.turboBoost => _TurboBoostPainter(progress: p),
+                  GadgetType.microJam => _MicroJamPainter(progress: p),
+                  GadgetType.skiMode => _SkiModePainter(progress: p),
+                  GadgetType.scanner => _StructuralScanPainter(progress: p),
                 },
               ),
               _buildHudAlertBanner(p),
+              if (widget.gadget == GadgetType.scanner)
+                _buildScannerTelemetryReadout(p),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildScannerTelemetryReadout(double p) {
+    final double opacity = p < 0.12
+        ? (p / 0.12)
+        : p > 0.85
+            ? ((1.0 - p) / 0.15)
+            : 1.0;
+    final int pct = (p * 100).round().clamp(0, 100);
+    final String integrity = p < 0.45 ? 'ANALYZING...' : '94.2% NOMINAL';
+    final String thermal = p < 0.60 ? 'SWEEPING IR' : '02 SIGNATURES';
+    final String alloy = p < 0.75 ? 'SAMPLING...' : 'FE-C / COMPOSITE';
+
+    return Positioned(
+      left: 20,
+      right: 20,
+      bottom: 112,
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xCC041014),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFF00E5FF).withValues(alpha: 0.75),
+              width: 1.4,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: const Color(0xFF00E5FF).withValues(alpha: 0.28),
+                blurRadius: 14,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  const Text(
+                    'GRID SCAN // TACTICAL TELEMETRY',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      color: Color(0xFF00E5FF),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  Text(
+                    '$pct%',
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      color: Color(0xFF69F0AE),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'STRUCTURAL INTEGRITY : $integrity\n'
+                'THERMAL CONTACTS     : $thermal\n'
+                'DENSITY / ALLOY      : $alloy',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  color: Color(0xFFB2EBF2),
+                  fontSize: 10.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -88,12 +177,18 @@ class _GadgetOverlayState extends State<GadgetOverlay>
       GadgetType.oilSlick => const Color(0xFFFF9100),
       GadgetType.smokeScreen => const Color(0xFFB0BEC5),
       GadgetType.turboBoost => const Color(0xFFFF2424),
+      GadgetType.microJam => const Color(0xFFE040FB),
+      GadgetType.skiMode => const Color(0xFFFFAB00),
+      GadgetType.scanner => const Color(0xFF00E5FF),
     };
 
     final IconData icon = switch (widget.gadget) {
       GadgetType.oilSlick => Icons.water_drop,
       GadgetType.smokeScreen => Icons.cloud,
       GadgetType.turboBoost => Icons.speed,
+      GadgetType.microJam => Icons.wifi_tethering_off,
+      GadgetType.skiMode => Icons.screen_rotation_alt,
+      GadgetType.scanner => Icons.radar,
     };
 
     // Piscada retrô de alerta HUD
@@ -460,5 +555,384 @@ class _TurboBoostPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TurboBoostPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// 4. Micro Jam: pulsos eletromagnéticos circulares e distorção/estática retrô.
+class _MicroJamPainter extends CustomPainter {
+  _MicroJamPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double intensity = progress < 0.10
+        ? (progress / 0.10)
+        : progress > 0.80
+            ? ((1.0 - progress) / 0.20)
+            : 1.0;
+
+    if (intensity <= 0.01) return;
+
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    final double maxRadius =
+        math.sqrt(size.width * size.width + size.height * size.height) * 0.62;
+
+    // Halo eletromagnético sutil no fundo
+    final Paint bgGlow = Paint()
+      ..shader = RadialGradient(
+        colors: <Color>[
+          const Color(0xFFE040FB).withValues(alpha: 0.24 * intensity),
+          const Color(0xFF00E5FF).withValues(alpha: 0.12 * intensity),
+          Colors.transparent,
+        ],
+        stops: const <double>[0.0, 0.55, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: maxRadius));
+    canvas.drawRect(Offset.zero & size, bgGlow);
+
+    // 4 ondas de pulso eletromagnético (EMP) expandindo ciclicamente do centro
+    for (int i = 0; i < 4; i++) {
+      final double waveT = (progress * 2.4 + i * 0.25) % 1.0;
+      final double radius = maxRadius * (0.08 + waveT * 0.96);
+      final double ringAlpha = ((1.0 - waveT) * 0.9 * intensity).clamp(0.0, 1.0);
+      final Color ringColor =
+          i.isEven ? const Color(0xFFE040FB) : const Color(0xFF00E5FF);
+
+      final Paint glowRing = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6.0 - waveT * 3.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+        ..color = ringColor.withValues(alpha: ringAlpha * 0.65);
+      canvas.drawCircle(center, radius, glowRing);
+
+      final Paint sharpRing = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = Colors.white.withValues(alpha: ringAlpha * 0.85);
+      canvas.drawCircle(center, radius, sharpRing);
+    }
+
+    // Distorção / estática retrô CRT (faixas horizontais e blocos de ruído)
+    final int frameSeed = (progress * 28).floor();
+    final math.Random rng = math.Random(1982 + frameSeed * 73);
+
+    // Linhas de interferência horizontal
+    for (int i = 0; i < 26; i++) {
+      final double y = rng.nextDouble() * size.height;
+      final double h = 1.2 + rng.nextDouble() * 4.5;
+      final double xOffset = (rng.nextDouble() - 0.5) * 32;
+      final Color bandColor = i % 3 == 0
+          ? const Color(0xFF00E5FF)
+          : i % 3 == 1
+              ? const Color(0xFFE040FB)
+              : Colors.white;
+      final Paint bandPaint = Paint()
+        ..color = bandColor.withValues(
+          alpha: (0.14 + rng.nextDouble() * 0.34) * intensity,
+        );
+      canvas.drawRect(
+        Rect.fromLTWH(xOffset, y, size.width, h),
+        bandPaint,
+      );
+    }
+
+    // Blocos de glitch estático
+    for (int i = 0; i < 18; i++) {
+      final double bx = rng.nextDouble() * size.width;
+      final double by = rng.nextDouble() * size.height;
+      final double bw = 18 + rng.nextDouble() * 64;
+      final double bh = 3 + rng.nextDouble() * 10;
+      final Paint glitchPaint = Paint()
+        ..color = (i.isEven ? const Color(0xFFFFEA00) : const Color(0xFF00E5FF))
+            .withValues(alpha: (0.22 + rng.nextDouble() * 0.32) * intensity);
+      canvas.drawRect(Rect.fromLTWH(bx, by, bw, bh), glitchPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MicroJamPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// 5. Ski Mode: horizonte artificial inclinando a 45° no HUD com barras laterais âmbar/vermelho.
+class _SkiModePainter extends CustomPainter {
+  _SkiModePainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double opacity = progress < 0.12
+        ? (progress / 0.12)
+        : progress > 0.82
+            ? ((1.0 - progress) / 0.18)
+            : 1.0;
+
+    if (opacity <= 0.01) return;
+
+    // Curva de inclinação: sobe suave até 45°, mantém equilíbrio e retorna
+    final double tiltFactor = progress < 0.25
+        ? Curves.easeOutBack.transform(progress / 0.25).clamp(0.0, 1.08)
+        : progress < 0.78
+            ? 1.0 + math.sin(progress * 26) * 0.03
+            : Curves.easeInCubic.transform((1.0 - progress) / 0.22);
+
+    final double angleRad = (45.0 * tiltFactor) * (math.pi / 180.0);
+    final Offset center = Offset(size.width / 2, size.height / 2);
+
+    // 1. Horizonte artificial rotacionado a 45°
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-angleRad);
+
+    final double span = math.max(size.width, size.height) * 1.4;
+
+    // Preenchimento sutil acima/abaixo do horizonte
+    final Paint upperTint = Paint()
+      ..color = const Color(0xFFFFAB00).withValues(alpha: 0.07 * opacity);
+    canvas.drawRect(Rect.fromLTWH(-span, -span, span * 2, span), upperTint);
+
+    final Paint lowerTint = Paint()
+      ..color = const Color(0xFFFF1744).withValues(alpha: 0.14 * opacity);
+    canvas.drawRect(Rect.fromLTWH(-span, 0, span * 2, span), lowerTint);
+
+    // Linha principal do horizonte artificial
+    final Paint horizonGlow = Paint()
+      ..color = const Color(0xFFFFAB00).withValues(alpha: 0.55 * opacity)
+      ..strokeWidth = 6.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawLine(Offset(-span, 0), Offset(span, 0), horizonGlow);
+
+    final Paint horizonLine = Paint()
+      ..color = const Color(0xFFFFEA00).withValues(alpha: 0.92 * opacity)
+      ..strokeWidth = 2.2;
+    canvas.drawLine(Offset(-span, 0), Offset(span, 0), horizonLine);
+
+    // Escada de pitch / inclinação
+    final Paint pitchPaint = Paint()
+      ..color = const Color(0xFFFFAB00).withValues(alpha: 0.65 * opacity)
+      ..strokeWidth = 1.6;
+    for (int step = -3; step <= 3; step++) {
+      if (step == 0) continue;
+      final double y = step * 34.0;
+      final double halfW = step.abs() == 1 ? 64.0 : 42.0;
+      canvas.drawLine(Offset(-halfW, y), Offset(-18, y), pitchPaint);
+      canvas.drawLine(Offset(18, y), Offset(halfW, y), pitchPaint);
+    }
+
+    // Silhueta central do chassi inclinado
+    final Paint reticlePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..color = const Color(0xFFFF2424).withValues(alpha: 0.9 * opacity);
+    canvas.drawCircle(Offset.zero, 24, reticlePaint);
+    canvas.drawLine(const Offset(-48, 0), const Offset(-26, 0), reticlePaint);
+    canvas.drawLine(const Offset(26, 0), const Offset(48, 0), reticlePaint);
+    canvas.drawLine(const Offset(0, -34), const Offset(0, -24), reticlePaint);
+
+    canvas.restore();
+
+    // 2. Arco superior de referência de 45°
+    final Rect arcRect = Rect.fromCircle(center: center, radius: 118);
+    final Paint arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFFFFAB00).withValues(alpha: 0.55 * opacity);
+    canvas.drawArc(arcRect, -math.pi * 0.85, math.pi * 0.70, false, arcPaint);
+
+    // 3. Barras de equilíbrio laterais (esquerda e direita) em âmbar/vermelho
+    const int barSegments = 14;
+    final double barHeight = size.height * 0.44;
+    final double barTop = (size.height - barHeight) / 2;
+    final double segH = (barHeight - (barSegments - 1) * 4) / barSegments;
+    final int leftLit = ((0.25 + 0.68 * tiltFactor) * barSegments)
+        .round()
+        .clamp(1, barSegments);
+    final int rightLit = ((0.75 - 0.52 * tiltFactor) * barSegments)
+        .round()
+        .clamp(1, barSegments);
+
+    _drawBalanceBar(
+      canvas: canvas,
+      x: 16,
+      top: barTop,
+      width: 14,
+      segH: segH,
+      segments: barSegments,
+      litCount: leftLit,
+      opacity: opacity,
+    );
+    _drawBalanceBar(
+      canvas: canvas,
+      x: size.width - 30,
+      top: barTop,
+      width: 14,
+      segH: segH,
+      segments: barSegments,
+      litCount: rightLit,
+      opacity: opacity,
+    );
+  }
+
+  void _drawBalanceBar({
+    required Canvas canvas,
+    required double x,
+    required double top,
+    required double width,
+    required double segH,
+    required int segments,
+    required int litCount,
+    required double opacity,
+  }) {
+    for (int i = 0; i < segments; i++) {
+      // Preenche de baixo para cima
+      final int idxFromBottom = segments - 1 - i;
+      final bool lit = idxFromBottom < litCount;
+      final bool isRedZone = idxFromBottom >= segments - 4;
+      final Color baseColor =
+          isRedZone ? const Color(0xFFFF1744) : const Color(0xFFFFAB00);
+      final double y = top + i * (segH + 4);
+      final RRect rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, y, width, segH),
+        const Radius.circular(2),
+      );
+
+      final Paint segPaint = Paint()
+        ..color = baseColor.withValues(alpha: (lit ? 0.92 : 0.16) * opacity);
+      canvas.drawRRect(rrect, segPaint);
+
+      if (lit) {
+        final Paint glowPaint = Paint()
+          ..color = baseColor.withValues(alpha: 0.42 * opacity)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+        canvas.drawRRect(rrect, glowPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SkiModePainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// 6. Scanner: feixe laser horizontal varrendo a tela de cima a baixo com grades táticas.
+class _StructuralScanPainter extends CustomPainter {
+  _StructuralScanPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double opacity = progress < 0.10
+        ? (progress / 0.10)
+        : progress > 0.85
+            ? ((1.0 - progress) / 0.15)
+            : 1.0;
+
+    if (opacity <= 0.01) return;
+
+    // 1. Grade tática HUD em ciano
+    final Paint gridPaint = Paint()
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.16 * opacity)
+      ..strokeWidth = 1.0;
+
+    const double step = 36.0;
+    for (double x = 0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    // Cantoneiras táticas (retículo de enquadramento)
+    final Paint bracketPaint = Paint()
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.72 * opacity)
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke;
+    const double m = 22.0;
+    const double len = 26.0;
+    // Top-left
+    canvas.drawLine(const Offset(m, m + len), const Offset(m, m), bracketPaint);
+    canvas.drawLine(const Offset(m, m), const Offset(m + len, m), bracketPaint);
+    // Top-right
+    canvas.drawLine(Offset(size.width - m - len, m), Offset(size.width - m, m), bracketPaint);
+    canvas.drawLine(Offset(size.width - m, m), Offset(size.width - m, m + len), bracketPaint);
+    // Bottom-left
+    canvas.drawLine(Offset(m, size.height - m - len), Offset(m, size.height - m), bracketPaint);
+    canvas.drawLine(Offset(m, size.height - m), Offset(m + len, size.height - m), bracketPaint);
+    // Bottom-right
+    canvas.drawLine(
+      Offset(size.width - m - len, size.height - m),
+      Offset(size.width - m, size.height - m),
+      bracketPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width - m, size.height - m - len),
+      Offset(size.width - m, size.height - m),
+      bracketPaint,
+    );
+
+    // 2. Feixe laser horizontal varrendo de cima para baixo (e retornando suavemente)
+    final double sweepT = progress < 0.72
+        ? (progress / 0.72)
+        : 1.0 - ((progress - 0.72) / 0.28);
+    final double laserY = size.height * (0.06 + sweepT * 0.88);
+    final bool goingDown = progress < 0.72;
+
+    // Rastro luminoso do feixe
+    const double trailHeight = 90.0;
+    final Rect trailRect = goingDown
+        ? Rect.fromLTWH(0, laserY - trailHeight, size.width, trailHeight)
+        : Rect.fromLTWH(0, laserY, size.width, trailHeight);
+    final Paint trailPaint = Paint()
+      ..shader = LinearGradient(
+        begin: goingDown ? Alignment.topCenter : Alignment.bottomCenter,
+        end: goingDown ? Alignment.bottomCenter : Alignment.topCenter,
+        colors: <Color>[
+          Colors.transparent,
+          const Color(0xFF00E5FF).withValues(alpha: 0.18 * opacity),
+          const Color(0xFFFF1744).withValues(alpha: 0.36 * opacity),
+        ],
+      ).createShader(trailRect);
+    canvas.drawRect(trailRect, trailPaint);
+
+    // Glow vermelho/ciano do laser
+    final Paint laserGlow = Paint()
+      ..color = const Color(0xFFFF1744).withValues(alpha: 0.75 * opacity)
+      ..strokeWidth = 9.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawLine(Offset(0, laserY), Offset(size.width, laserY), laserGlow);
+
+    // Núcleo branco/vermelho brilhante do feixe laser
+    final Paint laserCore = Paint()
+      ..color = const Color(0xFFFFEBEE).withValues(alpha: 0.96 * opacity)
+      ..strokeWidth = 2.4;
+    canvas.drawLine(Offset(0, laserY), Offset(size.width, laserY), laserCore);
+
+    // Pontos de detecção tática piscando conforme o laser passa
+    final List<Offset> markers = <Offset>[
+      Offset(size.width * 0.28, size.height * 0.32),
+      Offset(size.width * 0.70, size.height * 0.48),
+      Offset(size.width * 0.44, size.height * 0.66),
+    ];
+    for (int i = 0; i < markers.length; i++) {
+      final Offset pt = markers[i];
+      final double dist = (laserY - pt.dy).abs();
+      final bool revealed = laserY >= pt.dy || !goingDown;
+      if (!revealed) continue;
+
+      final double pulse = dist < 48 ? 1.0 : 0.65;
+      final Paint markerPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..color = const Color(0xFF69F0AE).withValues(alpha: pulse * opacity);
+      canvas.drawCircle(pt, 10 + (dist < 48 ? 4 : 0), markerPaint);
+      canvas.drawLine(pt + const Offset(-16, 0), pt + const Offset(16, 0), markerPaint);
+      canvas.drawLine(pt + const Offset(0, -16), pt + const Offset(0, 16), markerPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StructuralScanPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }

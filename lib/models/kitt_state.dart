@@ -84,35 +84,53 @@ class GeminiToolCall {
 enum GadgetType {
   oilSlick,
   smokeScreen,
-  turboBoost;
+  turboBoost,
+  microJam,
+  skiMode,
+  scanner;
 
   String get toolName => switch (this) {
         GadgetType.oilSlick => 'deploy_oil_slick',
         GadgetType.smokeScreen => 'activate_smoke_screen',
         GadgetType.turboBoost => 'trigger_turbo_boost',
+        GadgetType.microJam => 'trigger_micro_jam',
+        GadgetType.skiMode => 'activate_ski_mode',
+        GadgetType.scanner => 'run_structural_scan',
       };
 
   String get label => switch (this) {
         GadgetType.oilSlick => 'OIL SLICK',
         GadgetType.smokeScreen => 'SMOKE SCREEN',
         GadgetType.turboBoost => 'TURBO BOOST',
+        GadgetType.microJam => 'MICRO JAM',
+        GadgetType.skiMode => 'SKI MODE',
+        GadgetType.scanner => 'SCANNER',
       };
 
   String get hudAlert => switch (this) {
         GadgetType.oilSlick => 'OIL SLICK DEPLOYED • TRACTION HAZARD',
         GadgetType.smokeScreen => 'SMOKE SCREEN ACTIVE • VISIBILITY 0%',
         GadgetType.turboBoost => 'TURBO BOOST ENGAGED • MAX THRUST',
+        GadgetType.microJam => 'MICRO JAM ACTIVE • EMP INTERFERENCE',
+        GadgetType.skiMode => 'SKI MODE ENGAGED • 45° TWO-WHEEL BALANCE',
+        GadgetType.scanner => 'STRUCTURAL SCAN • TACTICAL TELEMETRY',
       };
 
   String get sfxAsset => switch (this) {
         GadgetType.oilSlick => 'audio/oil_slick.mp3',
         GadgetType.smokeScreen => 'audio/smoke_screen.mp3',
         GadgetType.turboBoost => 'audio/turbo_boost.mp3',
+        GadgetType.microJam => 'audio/micro_jam.mp3',
+        GadgetType.skiMode => 'audio/ski_mode.mp3',
+        GadgetType.scanner => 'audio/scanner.mp3',
       };
 
   Duration get duration => switch (this) {
         GadgetType.oilSlick => const Duration(milliseconds: 3600),
         GadgetType.smokeScreen => const Duration(milliseconds: 3900),
         GadgetType.turboBoost => const Duration(milliseconds: 3500),
+        GadgetType.microJam => const Duration(milliseconds: 3600),
+        GadgetType.skiMode => const Duration(milliseconds: 3800),
+        GadgetType.scanner => const Duration(milliseconds: 3900),
       };
 }

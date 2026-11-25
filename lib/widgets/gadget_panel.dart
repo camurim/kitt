@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/kitt_state.dart';
 
-/// Painel retrô anos 80 de gadgets clássicos e telemetria do KITT com:
-/// - Barra segmentada de LEDs para RPM, velocímetro real em km/h (GPS) e força G
+/// Painel compacto de telemetria do KITT com:
+/// - Leitura de RPM, força G, indicador GPS e velocidade em km/h
+/// - Barra segmentada de LEDs para RPM
 /// - Botão 'TELEMETRIA / SENSORES' para ativar/silenciar reações automáticas do KITT
-/// - Grid de 3 botões táteis retroiluminados com LEDs de status (Oil Slick, Smoke Screen, Turbo Boost)
 class GadgetPanel extends StatelessWidget {
   const GadgetPanel({
     super.key,
@@ -17,7 +17,6 @@ class GadgetPanel extends StatelessWidget {
     this.currentGForce = 0.0,
     this.telemetryEnabled = true,
     this.onToggleTelemetry,
-    required this.onTriggerGadget,
   });
 
   final GadgetType? activeGadget;
@@ -28,14 +27,13 @@ class GadgetPanel extends StatelessWidget {
   final double currentGForce;
   final bool telemetryEnabled;
   final VoidCallback? onToggleTelemetry;
-  final void Function(GadgetType gadget) onTriggerGadget;
 
   @override
   Widget build(BuildContext context) {
     final bool isBoosting = activeGadget == GadgetType.turboBoost;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF0C0C11),
         borderRadius: BorderRadius.circular(10),
@@ -55,46 +53,7 @@ class GadgetPanel extends StatelessWidget {
               ]
             : null,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _buildTelemetryBar(isBoosting),
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _RetroGadgetTile(
-                  gadget: GadgetType.oilSlick,
-                  accentColor: const Color(0xFFFF9100),
-                  icon: Icons.water_drop,
-                  isActive: activeGadget == GadgetType.oilSlick,
-                  onTap: () => onTriggerGadget(GadgetType.oilSlick),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _RetroGadgetTile(
-                  gadget: GadgetType.smokeScreen,
-                  accentColor: const Color(0xFF80DEEA),
-                  icon: Icons.cloud,
-                  isActive: activeGadget == GadgetType.smokeScreen,
-                  onTap: () => onTriggerGadget(GadgetType.smokeScreen),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _RetroGadgetTile(
-                  gadget: GadgetType.turboBoost,
-                  accentColor: const Color(0xFFFF2424),
-                  icon: Icons.bolt,
-                  isActive: activeGadget == GadgetType.turboBoost,
-                  onTap: () => onTriggerGadget(GadgetType.turboBoost),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: _buildTelemetryBar(isBoosting),
     );
   }
 
@@ -249,106 +208,6 @@ class GadgetPanel extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _RetroGadgetTile extends StatelessWidget {
-  const _RetroGadgetTile({
-    required this.gadget,
-    required this.accentColor,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final GadgetType gadget;
-  final Color accentColor;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(7),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
-          decoration: BoxDecoration(
-            color: isActive
-                ? accentColor.withValues(alpha: 0.26)
-                : const Color(0xFF14141C),
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(
-              color: isActive
-                  ? accentColor
-                  : accentColor.withValues(alpha: 0.42),
-              width: isActive ? 1.8 : 1.1,
-            ),
-            boxShadow: isActive
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: accentColor.withValues(alpha: 0.45),
-                      blurRadius: 10,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Icon(
-                    icon,
-                    size: 14,
-                    color: isActive ? accentColor : accentColor.withValues(alpha: 0.75),
-                  ),
-                  // LED indicador retrô
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isActive
-                          ? accentColor
-                          : accentColor.withValues(alpha: 0.18),
-                      boxShadow: isActive
-                          ? <BoxShadow>[
-                              BoxShadow(
-                                color: accentColor.withValues(alpha: 0.9),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ]
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                gadget.label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: isActive ? Colors.white : accentColor,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 10,
-                  letterSpacing: 0.9,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

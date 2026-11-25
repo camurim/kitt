@@ -12,6 +12,7 @@ import '../widgets/gadget_panel.dart';
 import '../widgets/kitt_dialer_modal.dart';
 import '../widgets/kitt_scanner_overlay.dart';
 import '../widgets/kitt_visualizer.dart';
+import '../widgets/listening_waveform_icon.dart';
 import '../widgets/side_button.dart';
 import '../widgets/surveillance_radar.dart';
 import 'aux_slot_config_page.dart';
@@ -28,6 +29,8 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final HomeController _controller;
   late final AnimationController _alertPulseController;
+  late final PageController _pageController;
+  int _currentPage = 0;
   bool _standbyScannerActive = false;
 
   @override
@@ -36,6 +39,7 @@ class _HomePageState extends State<HomePage>
     WidgetsBinding.instance.addObserver(this);
     _setWakelock(true);
     _controller = HomeController();
+    _pageController = PageController();
     _alertPulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -70,6 +74,7 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _setWakelock(false);
+    _pageController.dispose();
     _alertPulseController.dispose();
     _controller.dispose();
     super.dispose();
@@ -140,81 +145,28 @@ class _HomePageState extends State<HomePage>
                       if (_controller.activeAction != null)
                         _buildActiveActionBar(),
                       Expanded(
-                        child: LayoutBuilder(
-                          builder: (BuildContext context, BoxConstraints c) {
-                            final bool isWide = c.maxWidth >= 600;
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: <Widget>[
-                                SizedBox(
-                                  width: isWide ? 140 : 94,
-                                  child: _buildLeftColumn(),
-                                ),
-                                Expanded(
-                                  child: Center(
-                                    child: SingleChildScrollView(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          if (isSurveillance) ...<Widget>[
-                                            const SurveillanceRadar(size: 162),
-                                            const SizedBox(height: 8),
-                                            KittVisualizer(
-                                              levelListenable:
-                                                  _controller.voiceLevel,
-                                              compact: true,
-                                            ),
-                                          ] else
-                                            KittVisualizer(
-                                              levelListenable:
-                                                  _controller.voiceLevel,
-                                              pursuitMode: isPursuit,
-                                            ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            _controller.driveMode.label,
-                                            style: TextStyle(
-                                              color: isPursuit
-                                                  ? const Color(0xFFFF5252)
-                                                  : isSurveillance
-                                                      ? const Color(0xFF4DD0E1)
-                                                      : const Color(0xFFFFD54F),
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 12.5,
-                                              letterSpacing: 2.0,
-                                            ),
-                                          ),
-                                          if (_controller
-                                              .lastTranscript.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 6,
-                                                left: 10,
-                                                right: 10,
-                                              ),
-                                              child: Text(
-                                                _controller.lastTranscript,
-                                                textAlign: TextAlign.center,
-                                                maxLines: 3,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  color: Color(0xFFB5B5C2),
-                                                  fontSize: 11.5,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
+                        child: Column(
+                          children: <Widget>[
+                            Expanded(
+                              child: PageView(
+                                controller: _pageController,
+                                onPageChanged: (int idx) {
+                                  if (_currentPage != idx) {
+                                    setState(() => _currentPage = idx);
+                                  }
+                                },
+                                children: <Widget>[
+                                  _buildMainPanelPage(
+                                    isPursuit: isPursuit,
+                                    isSurveillance: isSurveillance,
                                   ),
-                                ),
-                                SizedBox(
-                                  width: isWide ? 140 : 94,
-                                  child: _buildRightColumn(),
-                                ),
-                              ],
-                            );
-                          },
+                                  _buildGadgetArsenalPage(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _buildPageIndicator(),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -228,7 +180,6 @@ class _HomePageState extends State<HomePage>
                         telemetryEnabled:
                             _controller.telemetryAutoCommentsEnabled,
                         onToggleTelemetry: _controller.toggleTelemetrySensors,
-                        onTriggerGadget: _controller.activateGadget,
                       ),
                       const SizedBox(height: 8),
                       AuxButtonsBar(
@@ -406,6 +357,220 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  Widget _buildMainPanelPage({
+    required bool isPursuit,
+    required bool isSurveillance,
+  }) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        final bool isWide = c.maxWidth >= 600;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(
+              width: isWide ? 140 : 94,
+              child: _buildLeftColumn(),
+            ),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (isSurveillance) ...<Widget>[
+                        const SurveillanceRadar(size: 162),
+                        const SizedBox(height: 8),
+                        KittVisualizer(
+                          levelListenable: _controller.voiceLevel,
+                          compact: true,
+                        ),
+                      ] else
+                        KittVisualizer(
+                          levelListenable: _controller.voiceLevel,
+                          pursuitMode: isPursuit,
+                        ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _controller.driveMode.label,
+                        style: TextStyle(
+                          color: isPursuit
+                              ? const Color(0xFFFF5252)
+                              : isSurveillance
+                                  ? const Color(0xFF4DD0E1)
+                                  : const Color(0xFFFFD54F),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                          letterSpacing: 2.0,
+                        ),
+                      ),
+                      if (_controller.lastTranscript.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: 6,
+                            left: 10,
+                            right: 10,
+                          ),
+                          child: Text(
+                            _controller.lastTranscript,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFB5B5C2),
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: isWide ? 140 : 94,
+              child: _buildRightColumn(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildGadgetArsenalPage() {
+    final GadgetType? active = _controller.activeGadget;
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Text(
+              'ARSENAL DE GADGETS',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                color: Color(0xFFFF5252),
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 2.2,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SideButton(
+                        label: 'OIL SLICK',
+                        accentColor: const Color(0xFFFF9100),
+                        isActive: active == GadgetType.oilSlick,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.oilSlick),
+                      ),
+                      const SizedBox(height: 12),
+                      SideButton(
+                        label: 'SMOKE SCREEN',
+                        accentColor: const Color(0xFF80DEEA),
+                        isActive: active == GadgetType.smokeScreen,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.smokeScreen),
+                      ),
+                      const SizedBox(height: 12),
+                      SideButton(
+                        label: 'TURBO BOOST',
+                        accentColor: const Color(0xFFFF2424),
+                        isActive: active == GadgetType.turboBoost,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.turboBoost),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SideButton(
+                        label: 'MICRO JAM',
+                        accentColor: const Color(0xFFE040FB),
+                        isActive: active == GadgetType.microJam,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.microJam),
+                      ),
+                      const SizedBox(height: 12),
+                      SideButton(
+                        label: 'SKI MODE',
+                        accentColor: const Color(0xFFFFAB00),
+                        isActive: active == GadgetType.skiMode,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.skiMode),
+                      ),
+                      const SizedBox(height: 12),
+                      SideButton(
+                        label: 'SCANNER',
+                        accentColor: const Color(0xFF00E5FF),
+                        isActive: active == GadgetType.scanner,
+                        onPressed: () =>
+                            _controller.activateGadget(GadgetType.scanner),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageIndicator() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List<Widget>.generate(2, (int idx) {
+        final bool selected = _currentPage == idx;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            _pageController.animateToPage(
+              idx,
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+            child: AnimatedContainer(
+              key: ValueKey<String>('panel_page_dot_$idx'),
+              duration: const Duration(milliseconds: 180),
+              width: selected ? 20 : 7,
+              height: 7,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                color: selected
+                    ? const Color(0xFFFF2424)
+                    : const Color(0xFF3E3E4E),
+                boxShadow: selected
+                    ? const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0xAAFF2424),
+                          blurRadius: 8,
+                          spreadRadius: 0.5,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
   Widget _buildLeftColumn() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -456,13 +621,6 @@ class _HomePageState extends State<HomePage>
           accentColor: const Color(0xFF40C4FF),
           compact: true,
           onPressed: () => _controller.triggerDashboardButton('air'),
-        ),
-        const SizedBox(height: 8),
-        SideButton(
-          label: 'OIL',
-          accentColor: const Color(0xFFFF9100),
-          compact: true,
-          onPressed: () => _controller.triggerDashboardButton('oil'),
         ),
       ],
     );
@@ -539,7 +697,12 @@ class _HomePageState extends State<HomePage>
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            icon: Icon(micOn ? Icons.mic : Icons.mic_none),
+            icon: micOn
+                ? ListeningWaveformIcon(
+                    levelListenable: _controller.micLevel,
+                    color: Colors.white,
+                  )
+                : const Icon(Icons.mic_none),
             label: Text(
               micOn ? 'OUVINDO... (TOQUE P/ PAUSAR)' : 'FALAR COM O KITT',
               style: const TextStyle(

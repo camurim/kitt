@@ -40,6 +40,9 @@ void main() {
           'deploy_oil_slick',
           'activate_smoke_screen',
           'trigger_turbo_boost',
+          'trigger_micro_jam',
+          'activate_ski_mode',
+          'run_structural_scan',
           'launch_aux_app',
           'make_phone_call',
           'scan_environment',
@@ -65,6 +68,14 @@ void main() {
           AudioEngineManager.computeNormalizedRms(buf.buffer.asUint8List());
       expect(level, greaterThan(0.8));
       expect(level, lessThanOrEqualTo(1.0));
+    });
+
+    test('synthesizes valid WAV buffer for Micro Jam interference SFX', () {
+      final Uint8List wav = AudioEngineManager.buildInterferenceWavBytes();
+      expect(wav.length, greaterThan(44));
+      // RIFF....WAVE header
+      expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
+      expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
     });
   });
 

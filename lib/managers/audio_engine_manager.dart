@@ -179,6 +179,74 @@ class AudioEngineManager {
     }
   }
 
+  /// Toca o efeito sonoro de interferência eletromagnética do MICRO JAM.
+  /// Tenta primeiro o asset MP3 opcional e, na ausência, sintetiza um burst
+  /// retrô de estática/pulso EMP em memória (WAV PCM 16-bit).
+  Future<void> playMicroJamInterferenceSfx() async {
+    try {
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.AssetSource('audio/micro_jam.mp3'));
+      return;
+    } catch (_) {
+      // Fallback para síntese de interferência eletromagnética em memória.
+    }
+
+    try {
+      final Uint8List wavBytes = buildInterferenceWavBytes();
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.BytesSource(wavBytes, mimeType: 'audio/wav'));
+    } catch (_) {
+      // Ignora em ambientes de teste sem canal nativo de áudio.
+    }
+  }
+
+  /// Gera um buffer WAV 16-bit mono (16 kHz, ~1.1s) com pulso EMP e estática retrô.
+  static Uint8List buildInterferenceWavBytes() {
+    const int sampleRate = 16000;
+    const int durationMs = 1100;
+    const int numSamples = (sampleRate * durationMs) ~/ 1000;
+    const int dataBytes = numSamples * 2;
+    final ByteData wav = ByteData(44 + dataBytes);
+
+    // Header RIFF/WAVE
+    wav.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    wav.setUint32(4, 36 + dataBytes, Endian.little);
+    wav.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+    wav.setUint32(12, 0x666d7420, Endian.big); // "fmt "
+    wav.setUint32(16, 16, Endian.little); // PCM chunk size
+    wav.setUint16(20, 1, Endian.little); // PCM format
+    wav.setUint16(22, 1, Endian.little); // Mono
+    wav.setUint32(24, sampleRate, Endian.little);
+    wav.setUint32(28, sampleRate * 2, Endian.little); // Byte rate
+    wav.setUint16(32, 2, Endian.little); // Block align
+    wav.setUint16(34, 16, Endian.little); // Bits per sample
+    wav.setUint32(36, 0x64617461, Endian.big); // "data"
+    wav.setUint32(40, dataBytes, Endian.little);
+
+    final math.Random rng = math.Random(19820926);
+    for (int i = 0; i < numSamples; i++) {
+      final double t = i / sampleRate;
+      final double norm = i / numSamples;
+      final double env = norm < 0.08
+          ? norm / 0.08
+          : norm > 0.72
+              ? (1.0 - norm) / 0.28
+              : 1.0;
+
+      // Varredura descendente de frequência EMP + modulação quadrada + estática
+      final double sweepFreq = 980.0 - 740.0 * norm;
+      final double empTone = math.sin(2 * math.pi * sweepFreq * t);
+      final double pulseMod =
+          math.sin(2 * math.pi * (14.0 + 18.0 * norm) * t) > 0 ? 1.0 : 0.35;
+      final double staticNoise = (rng.nextDouble() * 2.0 - 1.0) * 0.48;
+      final double mixed = ((empTone * 0.55 * pulseMod) + staticNoise) * env;
+      final int sample = (mixed * 18000).round().clamp(-32767, 32767);
+      wav.setInt16(44 + i * 2, sample, Endian.little);
+    }
+
+    return wav.buffer.asUint8List();
+  }
+
   void _scheduleLevelDecay() {
     _decayTimer?.cancel();
     _decayTimer = Timer.periodic(const Duration(milliseconds: 60), (Timer t) {

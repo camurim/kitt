@@ -97,6 +97,7 @@ class HomeController extends ChangeNotifier {
       _telemetryService.autoCommentsEnabled;
   List<AuxSlotConfig> get auxSlots => List<AuxSlotConfig>.unmodifiable(_auxSlots);
   ValueListenable<double> get voiceLevel => _audioEngine.voiceLevel;
+  ValueListenable<double> get micLevel => _micManager.micLevel;
 
   void _bindStreams() {
     _subs.add(
@@ -293,12 +294,18 @@ class HomeController extends ChangeNotifier {
     _activeGadget = gadget;
     _gadgetRunId++;
 
-    // Efeito sonoro opcional (falha silenciosamente se o MP3 não existir)
-    _audioEngine.playSfxAsset(gadget.sfxAsset);
+    // Efeito sonoro opcional (Micro Jam possui fallback sintetizado de interferência)
+    if (gadget == GadgetType.microJam) {
+      _audioEngine.playMicroJamInterferenceSfx();
+    } else {
+      _audioEngine.playSfxAsset(gadget.sfxAsset);
+    }
 
     // Feedback háptico e telemetria específicos do gadget
     if (gadget == GadgetType.turboBoost) {
       _runTurboBoostTelemetryAndHaptics();
+    } else if (gadget == GadgetType.microJam || gadget == GadgetType.skiMode) {
+      HapticFeedback.heavyImpact();
     } else {
       HapticFeedback.mediumImpact();
     }
@@ -326,6 +333,31 @@ class HomeController extends ChangeNotifier {
           'thruster_temp_c': 640,
           'duration_ms': gadget.duration.inMilliseconds,
         },
+      GadgetType.microJam => <String, dynamic>{
+          'status': 'jamming',
+          'gadget': 'micro_jam',
+          'emp_radius_m': 45,
+          'blocked_systems': <String>['cameras', 'ignition_ecus', 'radio_links'],
+          'frequency_band_mhz': '2.4-5800',
+          'duration_ms': gadget.duration.inMilliseconds,
+        },
+      GadgetType.skiMode => <String, dynamic>{
+          'status': 'engaged',
+          'gadget': 'ski_mode',
+          'tilt_angle_deg': 45,
+          'active_wheels': 'right_side_pair',
+          'gyro_balance_pct': 99.4,
+          'duration_ms': gadget.duration.inMilliseconds,
+        },
+      GadgetType.scanner => <String, dynamic>{
+          'status': 'scan_complete',
+          'gadget': 'structural_scanner',
+          'structural_integrity_pct': 94,
+          'thermal_signatures': 2,
+          'material_density': 'reinforced_concrete_steel',
+          'perimeter_threat_level': 'low',
+          'duration_ms': gadget.duration.inMilliseconds,
+        },
     };
 
     _setTransientAction(
@@ -335,10 +367,21 @@ class HomeController extends ChangeNotifier {
     );
 
     if (announceToGemini && _connectionState == LiveConnectionState.ready) {
-      _liveClient.sendTextMessage(
-        'O motorista acionou manualmente o gadget ${gadget.label} no painel '
-        '(telemetria: $telemetry). Reaja brevemente como KITT com sarcasmo ou precisão técnica.',
-      );
+      final String prompt = switch (gadget) {
+        GadgetType.microJam =>
+          'O motorista acionou o MICRO JAM no painel (telemetria: $telemetry). '
+              'Confirme brevemente no personagem do KITT que os sistemas eletrônicos próximos foram bloqueados pela interferência eletromagnética.',
+        GadgetType.skiMode =>
+          'O motorista ativou o SKI MODE no painel (telemetria: $telemetry). '
+              'Alerte brevemente no personagem do KITT sobre a manobra em duas rodas inclinada a 45 graus.',
+        GadgetType.scanner =>
+          'O motorista acionou o SCANNER estrutural no painel (telemetria: $telemetry). '
+              'Relate brevemente em voz alta no personagem do KITT o resultado da varredura estrutural e tática.',
+        _ =>
+          'O motorista acionou manualmente o gadget ${gadget.label} no painel '
+              '(telemetria: $telemetry). Reaja brevemente como KITT com sarcasmo ou precisão técnica.',
+      };
+      _liveClient.sendTextMessage(prompt);
     }
 
     _gadgetTimer = Timer(gadget.duration, () {
@@ -600,6 +643,27 @@ class HomeController extends ChangeNotifier {
       case 'activate_turbo_boost':
         result = activateGadget(
           GadgetType.turboBoost,
+          announceToGemini: false,
+        );
+        break;
+
+      case 'trigger_micro_jam':
+        result = activateGadget(
+          GadgetType.microJam,
+          announceToGemini: false,
+        );
+        break;
+
+      case 'activate_ski_mode':
+        result = activateGadget(
+          GadgetType.skiMode,
+          announceToGemini: false,
+        );
+        break;
+
+      case 'run_structural_scan':
+        result = activateGadget(
+          GadgetType.scanner,
           announceToGemini: false,
         );
         break;

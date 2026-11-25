@@ -90,7 +90,7 @@ Botões auxiliares configurados no painel: $auxSummary
 Regras obrigatórias para conversa por voz:
 - Responda sempre em Português do Brasil, de forma natural para ser falada em voz alta.
 - Seja conciso: use no máximo 1 a 3 frases curtas por resposta, sem listas, sem markdown e sem símbolos visuais.
-- Quando o motorista pedir ações ou gadgets do veículo (mudar modo de direção, soltar óleo na pista / Oil Slick, ativar cortina de fumaça / Smoke Screen, acionar Turbo Boost, fazer uma ligação telefônica ou abrir o discador, abrir um aplicativo vinculado a um botão auxiliar como "abrir botão 1" ou "iniciar navegação", escanear a área ou túnel, checar relatórios policiais, ligar para April, Bonnie ou Devon, ou acionar sistemas auxiliares), CHAME a ferramenta correspondente imediatamente e responda no personagem do KITT com precisão técnica ou sarcasmo elegante ao confirmar a execução.
+- Quando o motorista pedir ações ou gadgets do veículo (mudar modo de direção, soltar óleo na pista / Oil Slick, ativar cortina de fumaça / Smoke Screen, acionar Turbo Boost, disparar Micro Jam para bloquear eletrônicos próximos, ativar Ski Mode para andar em duas rodas, executar Scanner / varredura estrutural a laser, fazer uma ligação telefônica ou abrir o discador, abrir um aplicativo vinculado a um botão auxiliar como "abrir botão 1" ou "iniciar navegação", escanear a área ou túnel, checar relatórios policiais, ligar para April, Bonnie ou Devon, ou acionar sistemas auxiliares), CHAME a ferramenta correspondente imediatamente e responda no personagem do KITT com precisão técnica ou sarcasmo elegante ao confirmar a execução.
 ''';
     }
 
@@ -171,6 +171,39 @@ List<Map<String, dynamic>> buildKittToolDeclarations() {
           'parameters': <String, dynamic>{
             'type': 'OBJECT',
             'properties': <String, dynamic>{},
+          },
+        },
+        <String, dynamic>{
+          'name': 'trigger_micro_jam',
+          'description':
+              'Fires KITT Micro Jam electromagnetic pulse to disable or block nearby electronic systems, alarms, cameras, or pursuer electronics.',
+          'parameters': <String, dynamic>{
+            'type': 'OBJECT',
+            'properties': <String, dynamic>{},
+          },
+        },
+        <String, dynamic>{
+          'name': 'activate_ski_mode',
+          'description':
+              'Engages KITT Ski Mode, tilting the vehicle to 45 degrees onto two side wheels for narrow passages and evasive maneuvers.',
+          'parameters': <String, dynamic>{
+            'type': 'OBJECT',
+            'properties': <String, dynamic>{},
+          },
+        },
+        <String, dynamic>{
+          'name': 'run_structural_scan',
+          'description':
+              'Runs KITT laser structural scan with tactical HUD grid and telemetry readout, reporting the structural analysis aloud.',
+          'parameters': <String, dynamic>{
+            'type': 'OBJECT',
+            'properties': <String, dynamic>{
+              'target': <String, dynamic>{
+                'type': 'STRING',
+                'description':
+                    'Optional target or area to scan (e.g. "perimeter", "building", "vehicle").',
+              },
+            },
           },
         },
         <String, dynamic>{

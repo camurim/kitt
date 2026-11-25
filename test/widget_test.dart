@@ -9,6 +9,7 @@ import 'package:kitt_gemini/widgets/gadget_panel.dart';
 import 'package:kitt_gemini/widgets/kitt_dialer_modal.dart';
 import 'package:kitt_gemini/widgets/kitt_scanner_overlay.dart';
 import 'package:kitt_gemini/widgets/kitt_visualizer.dart';
+import 'package:kitt_gemini/widgets/listening_waveform_icon.dart';
 import 'package:kitt_gemini/widgets/side_button.dart';
 import 'package:kitt_gemini/widgets/surveillance_radar.dart';
 
@@ -55,10 +56,9 @@ void main() {
     level.dispose();
   });
 
-  testWidgets('GadgetPanel triggers Oil Slick, Smoke Screen and Turbo Boost', (
+  testWidgets('GadgetPanel displays compact telemetry and toggles sensors', (
     WidgetTester tester,
   ) async {
-    GadgetType? triggered;
     bool telemetryToggled = false;
 
     await tester.pumpWidget(
@@ -75,7 +75,6 @@ void main() {
                 currentGForce: 0.55,
                 telemetryEnabled: true,
                 onToggleTelemetry: () => telemetryToggled = true,
-                onTriggerGadget: (GadgetType g) => triggered = g,
               ),
               const GadgetOverlay(
                 gadget: GadgetType.oilSlick,
@@ -87,19 +86,46 @@ void main() {
       ),
     );
 
-    expect(find.text('OIL SLICK'), findsOneWidget);
-    expect(find.text('SMOKE SCREEN'), findsOneWidget);
-    expect(find.text('TURBO BOOST'), findsOneWidget);
+    expect(find.text('OIL SLICK'), findsNothing);
+    expect(find.text('SMOKE SCREEN'), findsNothing);
+    expect(find.text('TURBO BOOST'), findsNothing);
     expect(find.text('285 KM/H'), findsOneWidget);
     expect(find.text('GPS'), findsOneWidget);
     expect(find.text('TELEMETRIA / SENSORES'), findsOneWidget);
     expect(find.text(GadgetType.oilSlick.hudAlert), findsOneWidget);
 
-    await tester.tap(find.text('SMOKE SCREEN'));
     await tester.tap(find.text('TELEMETRIA / SENSORES'));
     await tester.pump();
-    expect(triggered, GadgetType.smokeScreen);
     expect(telemetryToggled, isTrue);
+  });
+
+  testWidgets('GadgetOverlay renders Micro Jam, Ski Mode and Scanner animations', (
+    WidgetTester tester,
+  ) async {
+    for (final GadgetType gadget in <GadgetType>[
+      GadgetType.microJam,
+      GadgetType.skiMode,
+      GadgetType.scanner,
+    ]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                GadgetOverlay(gadget: gadget, runId: 1),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text(gadget.hudAlert), findsOneWidget);
+      if (gadget == GadgetType.scanner) {
+        expect(find.text('GRID SCAN // TACTICAL TELEMETRY'), findsOneWidget);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 
   testWidgets('KittDialerSheet accepts keypad digits and triggers dial', (
@@ -231,5 +257,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(woke, isTrue);
     expect(wokeWithMic, isFalse);
+  });
+
+  testWidgets('ListeningWaveformIcon renders 5 animated bars reacting to mic level', (
+    WidgetTester tester,
+  ) async {
+    final ValueNotifier<double> micLevel = ValueNotifier<double>(0.0);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: ListeningWaveformIcon(levelListenable: micLevel),
+          ),
+        ),
+      ),
+    );
+
+    for (int i = 0; i < 5; i++) {
+      expect(find.byKey(ValueKey<String>('listening_wave_bar_$i')), findsOneWidget);
+    }
+
+    micLevel.value = 0.85;
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byKey(const ValueKey<String>('listening_wave_bar_2')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    micLevel.dispose();
   });
 }
