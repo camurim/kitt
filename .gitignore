@@ -1,0 +1,90 @@
+# ==============================================================================
+# KITT Gemini (Flutter + Android + Gemini Live API) — .gitignore
+# ==============================================================================
+
+# Secrets, API keys & signing credentials (NEVER commit!)
+.env
+.env.*
+!.env.example
+dart_defines.json
+secrets.json
+*.jks
+*.keystore
+*.p12
+android/key.properties
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Flutter / Dart / Pub
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+.widget_preview/
+/build/
+/coverage/
+test_driver/*.png
+
+# Android / Gradle
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/captures/
+android/gradlew.bat.bak
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# iOS / macOS / Xcode (caso adicione suporte futuro)
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+*.ipa
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Symbolication & Obfuscation
+app.*.symbols
+app.*.map.json
+
+# IDEs & Editors
+*.iml
+*.ipr
+*.iws
+.idea/
+.atom/
+.history/
+#.vscode/
+
+# OS & Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+*~
+.DS_Store
+Thumbs.db
+.build/
+.buildlog/
+.svn/
+.swiftpm/
+migrate_working_dir/

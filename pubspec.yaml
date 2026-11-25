@@ -1,0 +1,28 @@
+name: kitt_gemini
+description: KITT Systems Activated — Flutter app powered by Gemini Live API (native audio-to-audio + Function Calling + real-time PCM Voicebox).
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  web_socket_channel: ^3.0.1
+  flutter_pcm_sound: ^3.1.2
+  record: ^6.1.1
+  permission_handler: ^11.3.1
+  audioplayers: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # Descomente abaixo caso adicione áudios/imagens próprios em assets/
+  # assets:
+  #   - assets/audio/
+  #   - assets/images/
