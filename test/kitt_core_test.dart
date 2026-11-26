@@ -7,6 +7,7 @@ import 'package:kitturbo/managers/android_auto_bridge_service.dart';
 import 'package:kitturbo/managers/audio_engine_manager.dart';
 import 'package:kitturbo/managers/aux_apps_manager.dart';
 import 'package:kitturbo/managers/flag_dossier_service.dart';
+import 'package:kitturbo/managers/kitt_backup_service.dart';
 import 'package:kitturbo/managers/notification_filter_manager.dart';
 import 'package:kitturbo/managers/phone_call_manager.dart';
 import 'package:kitturbo/managers/vehicle_telemetry_service.dart';
@@ -474,6 +475,56 @@ void main() {
 
       final String afterDelete = await svc.deleteEntry('Bigode');
       expect(FlagDossierService.parseEntries(afterDelete), isEmpty);
+    });
+  });
+
+  group('KittBackupService', () {
+    test('formats backup filename as kitturbo_backup_YYYYMMDD.json', () {
+      expect(
+        KittBackupService.buildBackupFilename(DateTime(2026, 11, 26)),
+        'kitturbo_backup_20261126.json',
+      );
+    });
+
+    test('exports and restores JSON backup (dossiers + typed prefs) and standalone MD', () async {
+      final Directory tmpDir =
+          await Directory.systemTemp.createTemp('kitt_backup_test_');
+      addTearDown(() async {
+        if (await tmpDir.exists()) {
+          await tmpDir.delete(recursive: true);
+        }
+      });
+
+      final FlagDossierService dossierSvc =
+          FlagDossierService(directoryProvider: () async => tmpDir);
+      final KittBackupService backupSvc = KittBackupService(
+        dossierService: dossierSvc,
+        tempDirectoryProvider: () async => tmpDir,
+      );
+
+      final String jsonBackup = KittBackupService.buildBackupJson(
+        flagDossiersMarkdown:
+            '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n\n## Alvo: Devon Miles\n- Diretor da F.L.A.G.\n',
+        rawPreferences: <String, Object?>{
+          'kitt_aux_slots_v1': '[{"slotNumber":1,"label":"NAV","packageName":"com.waze"}]',
+          'kitt_notif_auto_read': true,
+          'kitt_notif_allowed_pkgs': <String>['com.whatsapp', 'org.telegram.messenger'],
+        },
+        now: DateTime(2026, 11, 26),
+      );
+
+      expect(jsonBackup, contains('net.carlosamorim.kitturbo'));
+      expect(jsonBackup, contains('Devon Miles'));
+      expect(jsonBackup, contains('kitt_aux_slots_v1'));
+
+      // Testa restauração de arquivo .md avulso
+      final KittBackupRestoreResult mdRes = await backupSvc.restoreFromContent(
+        content: '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n\n## Alvo: Bonnie\n- Engenheira chefe.\n',
+        fileName: 'meus_dossies.md',
+      );
+      expect(mdRes.isFullJsonBackup, isFalse);
+      expect(mdRes.restoredPrefsCount, 0);
+      expect(await dossierSvc.readRawMarkdown(), contains('Bonnie'));
     });
   });
 }

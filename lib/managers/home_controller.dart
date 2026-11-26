@@ -12,6 +12,7 @@ import 'audio_engine_manager.dart';
 import 'aux_apps_manager.dart';
 import 'flag_dossier_service.dart';
 import 'gemini_live_client.dart';
+import 'kitt_backup_service.dart';
 import 'mic_stream_manager.dart';
 import 'notification_filter_manager.dart';
 import 'phone_call_manager.dart';
@@ -50,6 +51,7 @@ class HomeController extends ChangeNotifier {
     AndroidAutoBridgeService? androidAutoBridge,
     NotificationFilterManager? notificationFilterManager,
     FlagDossierService? flagDossierService,
+    KittBackupService? backupService,
     KittPersonaConfig initialPersona = const KittPersonaConfig(),
   })  : _liveClient = liveClient ?? GeminiLiveClient(),
         _audioEngine = audioEngine ?? AudioEngineManager(),
@@ -61,6 +63,8 @@ class HomeController extends ChangeNotifier {
         _notificationFilter =
             notificationFilterManager ?? NotificationFilterManager(),
         _dossierService = flagDossierService ?? FlagDossierService(),
+        _backupService = backupService ??
+            KittBackupService(dossierService: flagDossierService),
         _persona = initialPersona {
     _transmissionQueue = FlagTransmissionQueue(
       isBusySpeaking: () => _audioEngine.isSpeaking,
@@ -79,6 +83,7 @@ class HomeController extends ChangeNotifier {
   final AndroidAutoBridgeService _androidAutoBridge;
   final NotificationFilterManager _notificationFilter;
   final FlagDossierService _dossierService;
+  final KittBackupService _backupService;
   late final FlagTransmissionQueue _transmissionQueue;
   Timer? _transmissionDelayTimer;
   Timer? _turnDrainTimer;
@@ -366,6 +371,56 @@ class HomeController extends ChangeNotifier {
     _syncDossiersToLiveSession();
     notifyListeners();
     return _flagDossiersMarkdown;
+  }
+
+  /// Exporta backup completo (`flag_dossiers.md` + `SharedPreferences`) em `.json`
+  /// e abre o menu nativo de compartilhamento (`share_plus`).
+  Future<String> exportFullBackup() async {
+    final String fileName = await _backupService.exportAndShareBackup();
+    HapticFeedback.mediumImpact();
+    _setTransientAction(
+      code: 'backup_exported',
+      title: 'BACKUP EXPORTED // F.L.A.G. ARCHIVE',
+      detail: 'Arquivo $fileName pronto para compartilhamento.',
+    );
+    return fileName;
+  }
+
+  /// Seleciona um arquivo `.json` (backup completo) ou `.md` (somente dossiês)
+  /// via `file_picker`, restaura os dados e sincroniza a sessão Gemini Live.
+  Future<KittBackupRestoreResult?> restoreBackupFromFile() async {
+    final KittBackupRestoreResult? result =
+        await _backupService.pickAndRestoreBackup();
+    if (result == null) return null;
+
+    _flagDossiersMarkdown = result.restoredMarkdown;
+    if (result.isFullJsonBackup) {
+      _auxSlots = await _auxAppsManager.loadSlots();
+      await _notificationFilter.init();
+    }
+
+    HapticFeedback.heavyImpact();
+    _audioEngine.playCommsBeepSfx();
+    _setTransientAction(
+      code: 'backup_restored',
+      title: KittBackupRestoreResult.hudConfirmation,
+      detail: result.isFullJsonBackup
+          ? '${result.fileName} restaurado (${result.restoredPrefsCount} preferências + Dossiês F.L.A.G.).'
+          : '${result.fileName} restaurado nos Dossiês F.L.A.G.',
+    );
+
+    if (_connectionState == LiveConnectionState.ready) {
+      _syncDossiersToLiveSession();
+      _liveClient.sendTextMessage(
+        '[SISTEMA: ${KittBackupRestoreResult.hudConfirmation} — '
+        'Backup "${result.fileName}" restaurado com sucesso]. '
+        'Confirme brevemente no personagem do KITT que o banco de dados F.L.A.G. '
+        'e as configurações do painel foram sincronizados.',
+      );
+    }
+
+    notifyListeners();
+    return result;
   }
 
   void _syncDossiersToLiveSession() {

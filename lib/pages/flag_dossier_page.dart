@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../managers/flag_dossier_service.dart';
+import '../managers/kitt_backup_service.dart';
 
 /// Terminal retrô anos 80 do 'BANCO DE DADOS TÁTICO / DOSSIÊS F.L.A.G.'
 /// com duas abas:
@@ -15,6 +16,8 @@ class FlagDossierPage extends StatefulWidget {
     required this.onUpsertEntry,
     required this.onDeleteEntry,
     required this.onImportMarkdown,
+    this.onExportFullBackup,
+    this.onRestoreBackupFile,
   });
 
   final String initialMarkdown;
@@ -27,6 +30,8 @@ class FlagDossierPage extends StatefulWidget {
   final Future<String> Function(String targetName) onDeleteEntry;
   final Future<String> Function(String rawMarkdown, {bool merge})
       onImportMarkdown;
+  final Future<String> Function()? onExportFullBackup;
+  final Future<KittBackupRestoreResult?> Function()? onRestoreBackupFile;
 
   @override
   State<FlagDossierPage> createState() => _FlagDossierPageState();
@@ -136,6 +141,82 @@ class _FlagDossierPageState extends State<FlagDossierPage> {
     );
   }
 
+  Future<void> _exportFullBackup() async {
+    final Future<String> Function()? handler = widget.onExportFullBackup;
+    if (handler == null) return;
+    setState(() => _saving = true);
+    try {
+      final String fileName = await handler();
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF14141E),
+          content: Text(
+            'BACKUP EXPORTADO // $fileName',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              color: Color(0xFFFFD54F),
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF2B0E12),
+          content: Text(
+            'FALHA AO EXPORTAR BACKUP: $e',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              color: Color(0xFFFF8A80),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreBackupFile() async {
+    final Future<KittBackupRestoreResult?> Function()? handler =
+        widget.onRestoreBackupFile;
+    if (handler == null) return;
+    setState(() => _saving = true);
+    try {
+      final KittBackupRestoreResult? res = await handler();
+      if (!mounted) return;
+      if (res == null) {
+        setState(() => _saving = false);
+        return;
+      }
+      _applyUpdatedMarkdown(
+        res.restoredMarkdown,
+        snackMessage: KittBackupRestoreResult.hudConfirmation,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF2B0E12),
+          content: Text(
+            'ERRO AO RESTAURAR BACKUP: $e',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              color: Color(0xFFFF8A80),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _openImportDialog() async {
     final ({String raw, bool merge})? payload =
         await showDialog<({String raw, bool merge})>(
@@ -239,6 +320,71 @@ class _FlagDossierPageState extends State<FlagDossierPage> {
       padding: const EdgeInsets.all(14),
       child: Column(
         children: <Widget>[
+          if (widget.onExportFullBackup != null ||
+              widget.onRestoreBackupFile != null) ...<Widget>[
+            Row(
+              children: <Widget>[
+                if (widget.onExportFullBackup != null)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey<String>('backup_export_btn'),
+                      onPressed: _saving ? null : _exportFullBackup,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFFD54F),
+                        side: const BorderSide(color: Color(0xAAFFD54F)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 11,
+                        ),
+                      ),
+                      icon: const Icon(Icons.ios_share, size: 16),
+                      label: const Text(
+                        'EXPORTAR BACKUP',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10.5,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (widget.onExportFullBackup != null &&
+                    widget.onRestoreBackupFile != null)
+                  const SizedBox(width: 8),
+                if (widget.onRestoreBackupFile != null)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey<String>('backup_restore_btn'),
+                      onPressed: _saving ? null : _restoreBackupFile,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF00E5FF),
+                        side: const BorderSide(color: Color(0xAA00E5FF)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 11,
+                        ),
+                      ),
+                      icon: const Icon(Icons.restore, size: 16),
+                      label: const Text(
+                        'RESTAURAR BACKUP',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10.5,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(

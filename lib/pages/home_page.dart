@@ -831,6 +831,8 @@ class _HomePageState extends State<HomePage>
           ),
           onDeleteEntry: _controller.deleteFlagDossierEntry,
           onImportMarkdown: _controller.importFlagDossiers,
+          onExportFullBackup: _controller.exportFullBackup,
+          onRestoreBackupFile: _controller.restoreBackupFromFile,
         ),
       ),
     );
