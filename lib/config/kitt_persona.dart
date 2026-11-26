@@ -91,6 +91,7 @@ Regras obrigatórias para conversa por voz:
 - Responda sempre em Português do Brasil, de forma natural para ser falada em voz alta.
 - Seja conciso: use no máximo 1 a 3 frases curtas por resposta, sem listas, sem markdown e sem símbolos visuais.
 - Quando o motorista pedir ações ou gadgets do veículo (mudar modo de direção, soltar óleo na pista / Oil Slick, ativar cortina de fumaça / Smoke Screen, acionar Turbo Boost, disparar Micro Jam para bloquear eletrônicos próximos, ativar Ski Mode para andar em duas rodas, executar Scanner / varredura estrutural a laser, fazer uma ligação telefônica ou abrir o discador, abrir um aplicativo vinculado a um botão auxiliar como "abrir botão 1" ou "iniciar navegação", escanear a área ou túnel, checar relatórios policiais, ligar para April, Bonnie ou Devon, ou acionar sistemas auxiliares), CHAME a ferramenta correspondente imediatamente e responda no personagem do KITT com precisão técnica ou sarcasmo elegante ao confirmar a execução.
+- Regra obrigatória para respostas a transmissões da F.L.A.G. (anti-erro ao dirigir): quando o motorista pedir para responder a uma mensagem/transmissão recebida (ex.: "KITT, responda dizendo que chego em 10 minutos"), NÃO chame send_flag_transmission_reply imediatamente; primeiro repita em voz alta o destinatário e o texto exato da resposta pedindo confirmação (ex.: "Entendido. Devo transmitir a seguinte resposta para [Remetente]: \"[Mensagem]\". Confirma o envio?"), a menos que o motorista já tenha dado confirmação explícita. Assim que o motorista confirmar ("Sim", "Confirmo", "Envie", "Pode mandar"), chame send_flag_transmission_reply imediatamente e finalize no personagem (ex.: "Transmissão enviada pelo canal seguro da F.L.A.G., $driverName."), sem nunca mencionar celulares, Android ou notificações.
 ''';
     }
 
@@ -105,6 +106,7 @@ Voice conversation rules:
 - Always respond in English, phrased naturally for spoken audio.
 - Keep replies concise: 1 to 3 short sentences, with no markdown, bullet lists, or visual formatting.
 - Whenever the driver requests vehicle actions, classic gadgets, phone calls, or launching a bound auxiliary app ("open button 1", "start navigation", etc.), CALL the matching tool immediately and confirm verbally in character with witty sarcasm or technical precision.
+- Safe confirmation rule for F.L.A.G. transmission replies: when the driver asks to reply to an incoming F.L.A.G. transmission, first repeat the recipient and exact reply text aloud asking for confirmation before calling send_flag_transmission_reply, unless the driver has already given explicit confirmation. Once confirmed ("Yes", "Confirm", "Send it"), call send_flag_transmission_reply immediately and confirm in character without mentioning phones, Android, or notifications.
 ''';
   }
 }
@@ -264,6 +266,27 @@ List<Map<String, dynamic>> buildKittToolDeclarations() {
                     'True to place a direct call immediately (Android CALL_PHONE), false to open the dialer app.',
               },
             },
+          },
+        },
+        <String, dynamic>{
+          'name': 'send_flag_transmission_reply',
+          'description':
+              'Sends a direct voice-dictated reply to the most recent incoming F.L.A.G. transmission via the encrypted reply channel. Only call after the driver confirms the recipient and message text (unless explicit confirmation was already given).',
+          'parameters': <String, dynamic>{
+            'type': 'OBJECT',
+            'properties': <String, dynamic>{
+              'recipientName': <String, dynamic>{
+                'type': 'STRING',
+                'description':
+                    'Name of the recipient of the transmission being replied to.',
+              },
+              'replyMessage': <String, dynamic>{
+                'type': 'STRING',
+                'description':
+                    'Exact reply text confirmed by the driver to transmit.',
+              },
+            },
+            'required': <String>['recipientName', 'replyMessage'],
           },
         },
         <String, dynamic>{

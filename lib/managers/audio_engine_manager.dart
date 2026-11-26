@@ -18,6 +18,8 @@ class AudioEngineManager {
   final ValueNotifier<double> voiceLevel = ValueNotifier<double>(0.0);
   final ap.AudioPlayer _sfxPlayer = ap.AudioPlayer();
 
+  bool get isSpeaking => voiceLevel.value > 0.03;
+
   AudioSession? _audioSession;
   bool _pcmInitialized = false;
   bool _focusActive = false;
@@ -265,6 +267,150 @@ class AudioEngineManager {
       final double staticNoise = (rng.nextDouble() * 2.0 - 1.0) * 0.48;
       final double mixed = ((empTone * 0.55 * pulseMod) + staticNoise) * env;
       final int sample = (mixed * 18000).round().clamp(-32767, 32767);
+      wav.setInt16(44 + i * 2, sample, Endian.little);
+    }
+
+    return wav.buffer.asUint8List();
+  }
+
+  /// Toca um bipe curto de rádio comunicador F.L.A.G. antes da leitura de transmissões.
+  /// Usa `audio/comms_beep.mp3` se existir ou sintetiza um duplo-bipe retrô em memória.
+  Future<void> playCommsBeepSfx() async {
+    await _acquireDuckingFocus();
+    try {
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.AssetSource('audio/comms_beep.mp3'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 900));
+      return;
+    } catch (_) {
+      // Fallback para síntese do bipe de rádio comunicador F.L.A.G.
+    }
+
+    try {
+      final Uint8List wavBytes = buildCommsBeepWavBytes();
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.BytesSource(wavBytes, mimeType: 'audio/wav'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 800));
+    } catch (_) {
+      _scheduleFocusRelease();
+    }
+  }
+
+  /// Gera um buffer WAV 16-bit mono (16 kHz, 320 ms) com bipe duplo retrô F.L.A.G.
+  static Uint8List buildCommsBeepWavBytes() {
+    const int sampleRate = 16000;
+    const int durationMs = 320;
+    const int numSamples = (sampleRate * durationMs) ~/ 1000;
+    const int dataBytes = numSamples * 2;
+    final ByteData wav = ByteData(44 + dataBytes);
+
+    wav.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    wav.setUint32(4, 36 + dataBytes, Endian.little);
+    wav.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+    wav.setUint32(12, 0x666d7420, Endian.big); // "fmt "
+    wav.setUint32(16, 16, Endian.little);
+    wav.setUint16(20, 1, Endian.little);
+    wav.setUint16(22, 1, Endian.little);
+    wav.setUint32(24, sampleRate, Endian.little);
+    wav.setUint32(28, sampleRate * 2, Endian.little);
+    wav.setUint16(32, 2, Endian.little);
+    wav.setUint16(34, 16, Endian.little);
+    wav.setUint32(36, 0x64617461, Endian.big); // "data"
+    wav.setUint32(40, dataBytes, Endian.little);
+
+    for (int i = 0; i < numSamples; i++) {
+      final double ms = (i / sampleRate) * 1000.0;
+      double amp = 0.0;
+      double freq = 1320.0;
+
+      if (ms >= 0 && ms < 110) {
+        freq = 1320.0;
+        amp = ms < 12 ? ms / 12.0 : (ms > 90 ? (110.0 - ms) / 20.0 : 1.0);
+      } else if (ms >= 150 && ms < 300) {
+        freq = 1760.0;
+        final double local = ms - 150.0;
+        amp = local < 12
+            ? local / 12.0
+            : (local > 125 ? (150.0 - local) / 25.0 : 1.0);
+      }
+
+      final double t = i / sampleRate;
+      final double tone =
+          math.sin(2 * math.pi * freq * t) * 0.8 +
+          math.sin(2 * math.pi * (freq * 2) * t) * 0.15;
+      final int sample = (tone * amp * 15000).round().clamp(-32767, 32767);
+      wav.setInt16(44 + i * 2, sample, Endian.little);
+    }
+
+    return wav.buffer.asUint8List();
+  }
+
+  /// Toca um bipe curto ascendente de confirmação de envio F.L.A.G.
+  Future<void> playTransmissionSentBeepSfx() async {
+    await _acquireDuckingFocus();
+    try {
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.AssetSource('audio/transmission_sent.mp3'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 900));
+      return;
+    } catch (_) {
+      // Fallback para síntese do bipe de confirmação em memória.
+    }
+
+    try {
+      final Uint8List wavBytes = buildTransmissionSentBeepWavBytes();
+      await _sfxPlayer.stop();
+      await _sfxPlayer.play(ap.BytesSource(wavBytes, mimeType: 'audio/wav'));
+      _scheduleFocusRelease(delay: const Duration(milliseconds: 800));
+    } catch (_) {
+      _scheduleFocusRelease();
+    }
+  }
+
+  /// Gera um buffer WAV 16-bit mono (16 kHz, 280 ms) com acorde ascendente de confirmação.
+  static Uint8List buildTransmissionSentBeepWavBytes() {
+    const int sampleRate = 16000;
+    const int durationMs = 280;
+    const int numSamples = (sampleRate * durationMs) ~/ 1000;
+    const int dataBytes = numSamples * 2;
+    final ByteData wav = ByteData(44 + dataBytes);
+
+    wav.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    wav.setUint32(4, 36 + dataBytes, Endian.little);
+    wav.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+    wav.setUint32(12, 0x666d7420, Endian.big); // "fmt "
+    wav.setUint32(16, 16, Endian.little);
+    wav.setUint16(20, 1, Endian.little);
+    wav.setUint16(22, 1, Endian.little);
+    wav.setUint32(24, sampleRate, Endian.little);
+    wav.setUint32(28, sampleRate * 2, Endian.little);
+    wav.setUint16(32, 2, Endian.little);
+    wav.setUint16(34, 16, Endian.little);
+    wav.setUint32(36, 0x64617461, Endian.big); // "data"
+    wav.setUint32(40, dataBytes, Endian.little);
+
+    for (int i = 0; i < numSamples; i++) {
+      final double ms = (i / sampleRate) * 1000.0;
+      double amp = 0.0;
+      double freq = 1046.5;
+
+      if (ms < 80) {
+        freq = 1046.5; // C6
+        amp = ms < 10 ? ms / 10.0 : (ms > 65 ? (80.0 - ms) / 15.0 : 1.0);
+      } else if (ms >= 95 && ms < 175) {
+        freq = 1318.5; // E6
+        final double local = ms - 95.0;
+        amp = local < 10 ? local / 10.0 : (local > 65 ? (80.0 - local) / 15.0 : 1.0);
+      } else if (ms >= 190 && ms < 275) {
+        freq = 1760.0; // A6
+        final double local = ms - 190.0;
+        amp = local < 10 ? local / 10.0 : (local > 65 ? (85.0 - local) / 20.0 : 1.0);
+      }
+
+      final double t = i / sampleRate;
+      final double tone = math.sin(2 * math.pi * freq * t) * 0.85 +
+          math.sin(2 * math.pi * (freq * 1.5) * t) * 0.12;
+      final int sample = (tone * amp * 15000).round().clamp(-32767, 32767);
       wav.setInt16(44 + i * 2, sample, Endian.little);
     }
 

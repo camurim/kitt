@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kitt_gemini/main.dart';
+import 'package:kitt_gemini/managers/aux_apps_manager.dart';
 import 'package:kitt_gemini/managers/home_controller.dart';
 import 'package:kitt_gemini/models/aux_slot_config.dart';
 import 'package:kitt_gemini/models/kitt_state.dart';
+import 'package:kitt_gemini/pages/comms_filter_page.dart';
 import 'package:kitt_gemini/pages/home_page.dart';
 import 'package:kitt_gemini/widgets/aux_buttons_bar.dart';
 import 'package:kitt_gemini/widgets/gadget_overlay.dart';
@@ -333,5 +335,61 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('CommsFilterPage checks permission, toggles master switch and per-app switches', (
+    WidgetTester tester,
+  ) async {
+    bool openedSettings = false;
+    bool? masterValue;
+    String? toggledPkg;
+    bool? toggledState;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommsFilterPage(
+          initialAllowedPackages: const <String>{'com.whatsapp'},
+          initialAutoReadEnabled: true,
+          checkPermission: () async => false,
+          openPermissionSettings: () async {
+            openedSettings = true;
+            return true;
+          },
+          loadInstalledApps: ({bool includeSystemApps = false}) async =>
+              const <InstalledAppEntry>[
+            InstalledAppEntry(name: 'Waze', packageName: 'com.waze'),
+            InstalledAppEntry(name: 'WhatsApp', packageName: 'com.whatsapp'),
+            InstalledAppEntry(
+              name: 'Telegram',
+              packageName: 'org.telegram.messenger',
+            ),
+          ],
+          onToggleAutoRead: (bool enabled) async => masterValue = enabled,
+          onTogglePackage: (String pkg, bool allowed) async {
+            toggledPkg = pkg;
+            toggledState = allowed;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('COMUNICAÇÕES / FILTRO F.L.A.G.'), findsOneWidget);
+    expect(find.text('ACESSO A NOTIFICAÇÕES: DESATIVADO'), findsOneWidget);
+    expect(find.text('LEITURA AUTOMÁTICA DE MENSAGENS'), findsOneWidget);
+    expect(find.text('MENSAGENS'), findsNWidgets(2));
+
+    await tester.tap(find.text('ATIVAR ACESSO A NOTIFICAÇÕES'));
+    await tester.pump();
+    expect(openedSettings, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey<String>('flag_master_auto_read_switch')));
+    await tester.pump();
+    expect(masterValue, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey<String>('flag_app_switch_org.telegram.messenger')));
+    await tester.pump();
+    expect(toggledPkg, 'org.telegram.messenger');
+    expect(toggledState, isTrue);
   });
 }

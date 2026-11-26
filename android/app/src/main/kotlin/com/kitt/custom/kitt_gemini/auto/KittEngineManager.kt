@@ -3,6 +3,7 @@ package com.kitt.custom.kitt_gemini.auto
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.kitt.custom.kitt_gemini.notifications.KittNotificationBridge
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -25,12 +26,14 @@ object KittEngineManager {
         val existing = cache.get(ENGINE_ID)
         if (existing != null) {
             KittAutoBridge.attach(existing.dartExecutor.binaryMessenger)
+            KittNotificationBridge.attach(context.applicationContext, existing.dartExecutor.binaryMessenger)
             return existing
         }
 
         val appContext = context.applicationContext
         val engine = FlutterEngine(appContext)
         KittAutoBridge.attach(engine.dartExecutor.binaryMessenger)
+        KittNotificationBridge.attach(appContext, engine.dartExecutor.binaryMessenger)
         engine.dartExecutor.executeDartEntrypoint(
             DartExecutor.DartEntrypoint.createDefault()
         )
