@@ -32,12 +32,15 @@ class GeminiLiveClient {
       StreamController<LiveConnectionState>.broadcast();
   final StreamController<String> _errorController =
       StreamController<String>.broadcast();
+  final StreamController<void> _turnCompleteController =
+      StreamController<void>.broadcast();
 
   Stream<Uint8List> get audioChunks => _audioController.stream;
   Stream<GeminiToolCall> get toolCalls => _toolCallController.stream;
   Stream<String> get transcripts => _transcriptController.stream;
   Stream<LiveConnectionState> get connectionState => _stateController.stream;
   Stream<String> get errors => _errorController.stream;
+  Stream<void> get turnCompleted => _turnCompleteController.stream;
 
   bool get isConnected => _channel != null;
 
@@ -215,6 +218,12 @@ class GeminiLiveClient {
       final Map<String, dynamic>? serverContent =
           json['serverContent'] as Map<String, dynamic>?;
       if (serverContent != null) {
+        if (serverContent['turnComplete'] == true ||
+            serverContent['interrupted'] == true) {
+          if (!_turnCompleteController.isClosed) {
+            _turnCompleteController.add(null);
+          }
+        }
         final Map<String, dynamic>? modelTurn =
             serverContent['modelTurn'] as Map<String, dynamic>?;
         final List<dynamic>? parts = modelTurn?['parts'] as List<dynamic>?;
@@ -283,5 +292,6 @@ class GeminiLiveClient {
     await _transcriptController.close();
     await _stateController.close();
     await _errorController.close();
+    await _turnCompleteController.close();
   }
 }

@@ -9,6 +9,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import com.kitt.custom.kitt_gemini.auto.KittAutoBridge
 import com.kitt.custom.kitt_gemini.auto.KittEngineManager
+import com.kitt.custom.kitt_gemini.notifications.KittNotificationBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -31,6 +32,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         KittAutoBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
+        KittNotificationBridge.attach(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, auxAppsChannel)
             .setMethodCallHandler { call, result ->

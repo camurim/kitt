@@ -16,6 +16,7 @@ import '../widgets/listening_waveform_icon.dart';
 import '../widgets/side_button.dart';
 import '../widgets/surveillance_radar.dart';
 import 'aux_slot_config_page.dart';
+import 'comms_filter_page.dart';
 
 /// Painel principal do KITT (retrato e paisagem) integrado à Gemini Live API.
 class HomePage extends StatefulWidget {
@@ -286,6 +287,19 @@ class _HomePageState extends State<HomePage>
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Comunicações / Filtro F.L.A.G.',
+          onPressed: _openCommsFilterPage,
+          icon: Icon(
+            _controller.autoReadMessagesEnabled
+                ? Icons.mark_chat_unread_outlined
+                : Icons.comments_disabled_outlined,
+            color: _controller.autoReadMessagesEnabled
+                ? const Color(0xFFFFD54F)
+                : const Color(0xFF8A8A9E),
+            size: 20,
           ),
         ),
         IconButton(
@@ -765,6 +779,22 @@ class _HomePageState extends State<HomePage>
     if (updated != null) {
       await _controller.saveAuxSlot(updated);
     }
+  }
+
+  Future<void> _openCommsFilterPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CommsFilterPage(
+          initialAllowedPackages: _controller.allowedNotificationPackages,
+          initialAutoReadEnabled: _controller.autoReadMessagesEnabled,
+          checkPermission: _controller.isNotificationAccessGranted,
+          openPermissionSettings: _controller.openNotificationAccessSettings,
+          loadInstalledApps: _controller.listInstalledApps,
+          onToggleAutoRead: _controller.setAutoReadMessagesEnabled,
+          onTogglePackage: _controller.setNotificationPackageAllowed,
+        ),
+      ),
+    );
   }
 
   Future<void> _openDialerModal() async {

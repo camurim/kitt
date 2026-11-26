@@ -12,6 +12,7 @@ import 'audio_engine_manager.dart';
 import 'aux_apps_manager.dart';
 import 'gemini_live_client.dart';
 import 'mic_stream_manager.dart';
+import 'notification_filter_manager.dart';
 import 'phone_call_manager.dart';
 import 'vehicle_telemetry_service.dart';
 
@@ -46,6 +47,7 @@ class HomeController extends ChangeNotifier {
     AuxAppsManager? auxAppsManager,
     VehicleTelemetryService? telemetryService,
     AndroidAutoBridgeService? androidAutoBridge,
+    NotificationFilterManager? notificationFilterManager,
     KittPersonaConfig initialPersona = const KittPersonaConfig(),
   })  : _liveClient = liveClient ?? GeminiLiveClient(),
         _audioEngine = audioEngine ?? AudioEngineManager(),
@@ -54,7 +56,13 @@ class HomeController extends ChangeNotifier {
         _auxAppsManager = auxAppsManager ?? AuxAppsManager(),
         _telemetryService = telemetryService ?? VehicleTelemetryService(),
         _androidAutoBridge = androidAutoBridge ?? AndroidAutoBridgeService(),
+        _notificationFilter =
+            notificationFilterManager ?? NotificationFilterManager(),
         _persona = initialPersona {
+    _transmissionQueue = FlagTransmissionQueue(
+      isBusySpeaking: () => _audioEngine.isSpeaking,
+      onDeliver: _deliverFlagTransmission,
+    );
     _bindStreams();
     _androidAutoBridge.attach(onCommand: handleAndroidAutoCommand);
   }
@@ -66,6 +74,10 @@ class HomeController extends ChangeNotifier {
   final AuxAppsManager _auxAppsManager;
   final VehicleTelemetryService _telemetryService;
   final AndroidAutoBridgeService _androidAutoBridge;
+  final NotificationFilterManager _notificationFilter;
+  late final FlagTransmissionQueue _transmissionQueue;
+  Timer? _transmissionDelayTimer;
+  Timer? _turnDrainTimer;
 
   List<AuxSlotConfig> _auxSlots = AuxSlotConfig.defaultSlots();
 
@@ -115,6 +127,9 @@ class HomeController extends ChangeNotifier {
   double get currentGForce => _telemetryService.currentGForce;
   bool get telemetryAutoCommentsEnabled =>
       _telemetryService.autoCommentsEnabled;
+  Set<String> get allowedNotificationPackages =>
+      _notificationFilter.allowedPackages;
+  bool get autoReadMessagesEnabled => _notificationFilter.autoReadEnabled;
   List<AuxSlotConfig> get auxSlots => List<AuxSlotConfig>.unmodifiable(_auxSlots);
   ValueListenable<double> get voiceLevel => _audioEngine.voiceLevel;
   ValueListenable<double> get micLevel => _micManager.micLevel;
@@ -155,12 +170,73 @@ class HomeController extends ChangeNotifier {
     );
 
     _subs.add(
+      _liveClient.turnCompleted.listen((_) {
+        _turnDrainTimer?.cancel();
+        // Aguarda um breve respiro após turnComplete para finalizar o buffer PCM.
+        _turnDrainTimer = Timer(const Duration(milliseconds: 650), () {
+          _transmissionQueue.notifySpeechCompleted();
+        });
+      }),
+    );
+
+    _subs.add(
       _telemetryService.telemetryUpdates.listen((_) => notifyListeners()),
     );
 
     _subs.add(
       _telemetryService.maneuverReactions.listen(_handleHarshManeuver),
     );
+
+    _subs.add(
+      _notificationFilter.incomingNotifications
+          .listen(_handleIncomingNotification),
+    );
+  }
+
+  void _handleIncomingNotification(IncomingNotificationEvent event) {
+    _transmissionQueue.enqueue(event);
+  }
+
+  void _deliverFlagTransmission(IncomingNotificationEvent event) {
+    _audioEngine.playCommsBeepSfx();
+    _setTransientAction(
+      code: 'comms_flag_${event.packageName}',
+      title: IncomingNotificationEvent.hudBannerTitle,
+      detail: '${event.appName.toUpperCase()} • ${event.title}',
+    );
+
+    if (_connectionState != LiveConnectionState.ready) {
+      _transmissionQueue.notifySpeechCompleted();
+      return;
+    }
+
+    _transmissionDelayTimer?.cancel();
+    _transmissionDelayTimer = Timer(const Duration(milliseconds: 280), () {
+      if (_connectionState == LiveConnectionState.ready) {
+        _liveClient.sendTextMessage(event.toGeminiPrompt());
+      } else {
+        _transmissionQueue.notifySpeechCompleted();
+      }
+    });
+  }
+
+  Future<bool> isNotificationAccessGranted() =>
+      _notificationFilter.isPermissionGranted();
+
+  Future<bool> openNotificationAccessSettings() =>
+      _notificationFilter.openPermissionSettings();
+
+  Future<void> setAutoReadMessagesEnabled(bool enabled) async {
+    await _notificationFilter.setAutoReadEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> setNotificationPackageAllowed(
+    String packageName,
+    bool allowed,
+  ) async {
+    await _notificationFilter.setPackageAllowed(packageName, allowed);
+    notifyListeners();
   }
 
   void _handleHarshManeuver(ManeuverEvent event) {
@@ -204,6 +280,7 @@ class HomeController extends ChangeNotifier {
     }
     _initialized = true;
     _auxSlots = await _auxAppsManager.loadSlots();
+    await _notificationFilter.init();
     notifyListeners();
     await _audioEngine.init();
     await _telemetryService.start();
@@ -733,6 +810,49 @@ class HomeController extends ChangeNotifier {
         };
         break;
 
+      case 'send_flag_transmission_reply':
+        final String recipientName =
+            (call.args['recipientName'] as String? ?? '').trim();
+        final String replyMessage =
+            (call.args['replyMessage'] as String? ?? '').trim();
+        final Map<String, dynamic> replyRes =
+            await _notificationFilter.replyToLastNotification(replyMessage);
+        final bool sent = replyRes['success'] == true;
+        final String resolvedRecipient = recipientName.isNotEmpty
+            ? recipientName
+            : (replyRes['sender'] as String? ?? 'destinatário');
+
+        if (sent) {
+          HapticFeedback.mediumImpact();
+          _audioEngine.playTransmissionSentBeepSfx();
+          _setTransientAction(
+            code: 'flag_transmission_sent',
+            title: 'TRANSMISSION SENT // CHANNEL ENCRYPTED',
+            detail: '$resolvedRecipient • "$replyMessage"',
+          );
+          result = <String, dynamic>{
+            'status': 'sent',
+            'recipient': resolvedRecipient,
+            'reply_message': replyMessage,
+            'channel': replyRes['appName'] ?? 'F.L.A.G.',
+            'hud_alert': 'TRANSMISSION SENT // CHANNEL ENCRYPTED',
+          };
+        } else {
+          _setTransientAction(
+            code: 'flag_transmission_failed',
+            title: 'TRANSMISSION FAILED // F.L.A.G. CHANNEL',
+            detail: replyRes['message'] as String? ??
+                'Não foi possível transmitir a resposta.',
+          );
+          result = <String, dynamic>{
+            'status': 'error',
+            'error': replyRes['error'] ?? 'reply_failed',
+            'message': replyRes['message'] ??
+                'Não foi possível transmitir a resposta pelo canal seguro.',
+          };
+        }
+        break;
+
       case 'call_contact':
         final String contact = call.args['contact'] as String? ?? 'devon';
         _setTransientAction(
@@ -851,6 +971,10 @@ class HomeController extends ChangeNotifier {
   @override
   void dispose() {
     _androidAutoBridge.dispose();
+    _notificationFilter.dispose();
+    _transmissionQueue.clear();
+    _transmissionDelayTimer?.cancel();
+    _turnDrainTimer?.cancel();
     _actionClearTimer?.cancel();
     _gadgetTimer?.cancel();
     _telemetryTimer?.cancel();

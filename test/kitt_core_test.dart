@@ -5,6 +5,7 @@ import 'package:kitt_gemini/config/kitt_persona.dart';
 import 'package:kitt_gemini/managers/android_auto_bridge_service.dart';
 import 'package:kitt_gemini/managers/audio_engine_manager.dart';
 import 'package:kitt_gemini/managers/aux_apps_manager.dart';
+import 'package:kitt_gemini/managers/notification_filter_manager.dart';
 import 'package:kitt_gemini/managers/phone_call_manager.dart';
 import 'package:kitt_gemini/managers/vehicle_telemetry_service.dart';
 import 'package:kitt_gemini/models/aux_slot_config.dart';
@@ -23,6 +24,8 @@ void main() {
       expect(prompt, contains('Carlos'));
       expect(prompt, contains('PURSUIT'));
       expect(prompt, contains('Português do Brasil'));
+      expect(prompt, contains('send_flag_transmission_reply'));
+      expect(prompt, contains('Confirma o envio?'));
     });
 
     test('exposes all expected Gemini Live function declarations', () {
@@ -46,6 +49,7 @@ void main() {
           'run_structural_scan',
           'launch_aux_app',
           'make_phone_call',
+          'send_flag_transmission_reply',
           'scan_environment',
           'call_contact',
           'trigger_system_effect',
@@ -75,6 +79,20 @@ void main() {
       final Uint8List wav = AudioEngineManager.buildInterferenceWavBytes();
       expect(wav.length, greaterThan(44));
       // RIFF....WAVE header
+      expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
+      expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
+    });
+
+    test('synthesizes valid WAV buffer for F.L.A.G. commlink beep SFX', () {
+      final Uint8List wav = AudioEngineManager.buildCommsBeepWavBytes();
+      expect(wav.length, greaterThan(44));
+      expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
+      expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
+    });
+
+    test('synthesizes valid WAV buffer for F.L.A.G. transmission sent beep SFX', () {
+      final Uint8List wav = AudioEngineManager.buildTransmissionSentBeepWavBytes();
+      expect(wav.length, greaterThan(44));
       expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
       expect(String.fromCharCodes(wav.sublist(8, 12)), 'WAVE');
     });
@@ -237,6 +255,176 @@ void main() {
         ),
         'TURBO BOOST ENGAGED',
       );
+    });
+  });
+
+  group('NotificationFilterManager (F.L.A.G. Comms Filter)', () {
+    test('highlights messaging apps and filters only authorized packages when auto-read is on', () async {
+      final NotificationFilterManager mgr = NotificationFilterManager();
+      final List<IncomingNotificationEvent> received = <IncomingNotificationEvent>[];
+      final sub = mgr.incomingNotifications.listen(received.add);
+
+      const InstalledAppEntry wa = InstalledAppEntry(
+        name: 'WhatsApp',
+        packageName: 'com.whatsapp',
+      );
+      const InstalledAppEntry maps = InstalledAppEntry(
+        name: 'Maps',
+        packageName: 'com.google.android.apps.maps',
+      );
+      const InstalledAppEntry tg = InstalledAppEntry(
+        name: 'Telegram',
+        packageName: 'org.telegram.messenger',
+      );
+
+      expect(NotificationFilterManager.isMessagingApp(wa), isTrue);
+      expect(NotificationFilterManager.isMessagingApp(tg), isTrue);
+      expect(NotificationFilterManager.isMessagingApp(maps), isFalse);
+
+      final List<InstalledAppEntry> sorted =
+          NotificationFilterManager.sortAppsHighlightingMessaging(
+        <InstalledAppEntry>[maps, wa, tg],
+      );
+      expect(sorted.last.packageName, 'com.google.android.apps.maps');
+
+      await mgr.setPackageAllowed('com.whatsapp', true);
+
+      // App não autorizado: ignorado
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.google.android.apps.maps',
+          appName: 'Maps',
+          title: 'Trânsito',
+          text: 'Rota atualizada',
+        ),
+        isFalse,
+      );
+
+      // App autorizado: encaminhado
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: 'Devon',
+          text: 'Michael, volte à Fundação.',
+        ),
+        isTrue,
+      );
+
+      // Chave geral silenciada: bloqueado mesmo se autorizado
+      await mgr.setAutoReadEnabled(false);
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: 'Bonnie',
+          text: 'Diagnóstico pronto.',
+        ),
+        isFalse,
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(received.length, 1);
+      expect(
+        received.first.toGeminiPrompt(),
+        contains('[TRANSMISSÃO F.L.A.G. RECEBIDA | Canal: WhatsApp | Remetente: Devon | Conteúdo: Michael, volte à Fundação.]'),
+      );
+      expect(
+        IncomingNotificationEvent.hudBannerTitle,
+        'INCOMING TRANSMISSION // F.L.A.G. ENCRYPTED CHANNEL',
+      );
+
+      // Rejeita resumo de grupo, texto/título vazio e duplicata dentro da janela
+      await mgr.setAutoReadEnabled(true);
+      final DateTime t0 = DateTime(2026, 11, 25, 21, 20, 0);
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: 'Grupo F.L.A.G.',
+          text: '3 novas mensagens',
+          timestamp: t0,
+        ),
+        isFalse,
+      );
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: '',
+          text: 'Mensagem sem remetente',
+          timestamp: t0,
+        ),
+        isFalse,
+      );
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: 'April',
+          text: 'Relatório enviado',
+          timestamp: t0,
+        ),
+        isTrue,
+      );
+      // Duplicata 2s depois: bloqueada
+      expect(
+        mgr.processIncomingNotification(
+          packageName: 'com.whatsapp',
+          appName: 'WhatsApp',
+          title: 'April',
+          text: 'Relatório enviado',
+          timestamp: t0.add(const Duration(seconds: 2)),
+        ),
+        isFalse,
+      );
+
+      await sub.cancel();
+      mgr.dispose();
+    });
+
+    test('FlagTransmissionQueue queues second message while KITT is speaking and delivers after turnComplete', () {
+      bool speaking = false;
+      final List<String> deliveredSenders = <String>[];
+      final FlagTransmissionQueue queue = FlagTransmissionQueue(
+        isBusySpeaking: () => speaking,
+        onDeliver: (IncomingNotificationEvent ev) {
+          deliveredSenders.add(ev.title);
+          speaking = true;
+        },
+      );
+
+      final IncomingNotificationEvent msg1 = IncomingNotificationEvent(
+        packageName: 'com.whatsapp',
+        appName: 'WhatsApp',
+        title: 'Devon',
+        text: 'Primeira transmissão.',
+        timestamp: DateTime(2026, 11, 25, 21, 20, 0),
+      );
+      final IncomingNotificationEvent msg2 = IncomingNotificationEvent(
+        packageName: 'org.telegram.messenger',
+        appName: 'Telegram',
+        title: 'Bonnie',
+        text: 'Segunda transmissão.',
+        timestamp: DateTime(2026, 11, 25, 21, 20, 1),
+      );
+
+      queue.enqueue(msg1);
+      expect(deliveredSenders, <String>['Devon']);
+      expect(queue.pendingCount, 0);
+
+      // Chega a segunda enquanto KITT ainda fala -> entra na fila
+      queue.enqueue(msg2);
+      expect(deliveredSenders, <String>['Devon']);
+      expect(queue.pendingCount, 1);
+
+      // KITT termina de falar -> entrega automaticamente a segunda
+      speaking = false;
+      queue.notifySpeechCompleted();
+      expect(deliveredSenders, <String>['Devon', 'Bonnie']);
+      expect(queue.pendingCount, 0);
+
+      queue.clear();
     });
   });
 }
