@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kitt_gemini/config/kitt_persona.dart';
+import 'package:kitt_gemini/managers/android_auto_bridge_service.dart';
 import 'package:kitt_gemini/managers/audio_engine_manager.dart';
 import 'package:kitt_gemini/managers/aux_apps_manager.dart';
 import 'package:kitt_gemini/managers/phone_call_manager.dart';
@@ -195,6 +196,47 @@ void main() {
         now: t0.add(const Duration(seconds: 120)),
       );
       expect(muted, isNull);
+    });
+  });
+
+  group('AndroidAutoBridgeService', () {
+    test('computes dynamic status subtitles for online, pursuit, mic and gadgets', () {
+      expect(
+        AndroidAutoBridgeService.computeStatusSubtitle(
+          connectionState: LiveConnectionState.ready,
+          driveMode: DriveMode.normalCruise,
+          isMicActive: false,
+          activeGadget: null,
+        ),
+        'ONLINE - AGUARDANDO COMANDO',
+      );
+      expect(
+        AndroidAutoBridgeService.computeStatusSubtitle(
+          connectionState: LiveConnectionState.ready,
+          driveMode: DriveMode.pursuit,
+          isMicActive: false,
+          activeGadget: null,
+        ),
+        'PURSUIT MODE ENGAGED',
+      );
+      expect(
+        AndroidAutoBridgeService.computeStatusSubtitle(
+          connectionState: LiveConnectionState.ready,
+          driveMode: DriveMode.normalCruise,
+          isMicActive: true,
+          activeGadget: null,
+        ),
+        'OUVINDO... (GEMINI LIVE)',
+      );
+      expect(
+        AndroidAutoBridgeService.computeStatusSubtitle(
+          connectionState: LiveConnectionState.ready,
+          driveMode: DriveMode.pursuit,
+          isMicActive: false,
+          activeGadget: GadgetType.turboBoost,
+        ),
+        'TURBO BOOST ENGAGED',
+      );
     });
   });
 }

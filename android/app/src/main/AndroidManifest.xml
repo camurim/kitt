@@ -19,6 +19,11 @@
     <!-- Manter tela ativa no suporte veicular (wakelock_plus) -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
+    <!-- Android Auto (Car App Library + Foreground Service para manter sessão ativa com tela apagada) -->
+    <uses-permission android:name="androidx.car.app.ACCESS_SURFACE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+
     <!-- Recursos opcionais para manter compatibilidade com tablets/emuladores -->
     <uses-feature android:name="android.hardware.telephony" android:required="false"/>
     <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
@@ -49,6 +54,28 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Android Auto: descritor de template e nível mínimo da Car App API -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
+
+        <service
+            android:name=".auto.KittCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.IOT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".auto.KittAutoForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 
     <queries>

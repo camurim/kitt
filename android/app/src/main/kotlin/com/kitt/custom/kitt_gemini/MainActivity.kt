@@ -1,11 +1,14 @@
 package com.kitt.custom.kitt_gemini
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import com.kitt.custom.kitt_gemini.auto.KittAutoBridge
+import com.kitt.custom.kitt_gemini.auto.KittEngineManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,8 +17,20 @@ import java.io.ByteArrayOutputStream
 class MainActivity : FlutterActivity() {
     private val auxAppsChannel = "com.kitt.custom/aux_apps"
 
+    override fun provideFlutterEngine(context: Context): FlutterEngine {
+        return KittEngineManager.ensureEngine(context)
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean {
+        // Preserva o FlutterEngine compartilhado quando a tela do celular apaga ou
+        // a Activity é fechada, mantendo a sessão Android Auto / Gemini Live ativa.
+        return false
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        KittAutoBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, auxAppsChannel)
             .setMethodCallHandler { call, result ->

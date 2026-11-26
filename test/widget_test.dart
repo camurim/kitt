@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kitt_gemini/main.dart';
+import 'package:kitt_gemini/managers/home_controller.dart';
 import 'package:kitt_gemini/models/aux_slot_config.dart';
 import 'package:kitt_gemini/models/kitt_state.dart';
+import 'package:kitt_gemini/pages/home_page.dart';
 import 'package:kitt_gemini/widgets/aux_buttons_bar.dart';
 import 'package:kitt_gemini/widgets/gadget_overlay.dart';
 import 'package:kitt_gemini/widgets/gadget_panel.dart';
@@ -284,5 +286,52 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     micLevel.dispose();
+  });
+
+  testWidgets('HomePage renders PageView, switches to gadgets and triggers overlays cleanly', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    // Simula a sequência real: motor iniciado antes (main/headless) e HomePage montada depois.
+    KittAppSession.controller.initAndConnect();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HomePage(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // Página 1: 5 botões na esquerda (sem OIL duplicado) e 6 na direita
+    expect(find.text('NORMAL'), findsOneWidget);
+    expect(find.text('PURSUIT'), findsOneWidget);
+    expect(find.text('AIR'), findsOneWidget);
+    expect(find.text('OIL'), findsNothing);
+    expect(find.text('P1'), findsOneWidget);
+    expect(find.text('S2'), findsOneWidget);
+
+    // Alterna para Página 2 pelo dot indicador
+    await tester.tap(find.byKey(const ValueKey<String>('panel_page_dot_1')));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('OIL SLICK'), findsOneWidget);
+    expect(find.text('SMOKE SCREEN'), findsOneWidget);
+    expect(find.text('TURBO BOOST'), findsOneWidget);
+    expect(find.text('MICRO JAM'), findsOneWidget);
+    expect(find.text('SKI MODE'), findsOneWidget);
+    expect(find.text('SCANNER'), findsOneWidget);
+
+    // Dispara um novo gadget (MICRO JAM) e verifica overlay sem exceções
+    await tester.tap(find.text('MICRO JAM'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(GadgetType.microJam.hudAlert), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 7));
   });
 }

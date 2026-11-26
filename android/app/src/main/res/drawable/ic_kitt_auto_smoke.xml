@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Nuvem tática de fumaça HUD -->
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M18.5,17H6.5C4.57,17 3,15.43 3,13.5c0,-1.74 1.28,-3.18 2.95,-3.45C6.58,7.43 8.95,5.5 11.8,5.5c3.12,0 5.68,2.38 5.97,5.42C19.62,11.15 21,12.71 21,14.6 21,15.92 19.88,17 18.5,17z" />
+    <!-- Linhas de dissipação em vermelho neon -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M5,19.8h6M13.5,19.8h5.5"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF2424"
+        android:strokeLineCap="round" />
+</vector>
