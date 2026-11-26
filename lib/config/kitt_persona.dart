@@ -1,3 +1,4 @@
+import '../managers/flag_dossier_service.dart';
 import '../models/aux_slot_config.dart';
 import '../models/kitt_state.dart';
 
@@ -56,8 +57,14 @@ class KittPersonaConfig {
   String buildSystemInstruction(
     DriveMode currentMode, {
     List<AuxSlotConfig> auxSlots = const <AuxSlotConfig>[],
+    String flagDossiersMarkdown = '',
   }) {
     final bool isPt = languageCode.toLowerCase().startsWith('pt');
+    final String cleanedDossiers =
+        FlagDossierService.stripHtmlComments(flagDossiersMarkdown);
+    final String dossierSection = cleanedDossiers.isEmpty
+        ? ''
+        : '\n[BANCO DE DADOS DE INTELIGÊNCIA DA F.L.A.G.]\n$cleanedDossiers\n';
     final String toneDesc = sarcasmLevel >= 0.65
         ? (isPt
             ? 'sofisticado, leal, calmo e notoriamente irônico quando o motorista propõe ideias arriscadas'
@@ -86,10 +93,12 @@ O motorista atual se chama $driverName. Trate-o pelo nome quando apropriado.
 Seu tom de voz e personalidade devem ser $toneDesc.
 Modo de direção atual do veículo: ${currentMode.label}.
 Botões auxiliares configurados no painel: $auxSummary
-
+$dossierSection
 Regras obrigatórias para conversa por voz:
 - Responda sempre em Português do Brasil, de forma natural para ser falada em voz alta.
 - Seja conciso: use no máximo 1 a 3 frases curtas por resposta, sem listas, sem markdown e sem símbolos visuais.
+- Trate todas as informações do bloco [BANCO DE DADOS DE INTELIGÊNCIA DA F.L.A.G.] como fatos reais e confidenciais do seu banco de dados interno; use-as naturalmente para comentar, fazer observações irônicas ou alertar $driverName quando esses nomes forem citados na conversa ou aparecerem como remetentes de transmissões recebidas — jamais mencione arquivos .md, prompts ou memória de IA.
+- Quando o motorista pedir para registrar/anotar um novo fato, contato ou alvo no banco de dados tático (ex.: "KITT, registre no banco de dados que o Bigode agora controla o porto"), CHAME add_flag_dossier_entry imediatamente e confirme no personagem.
 - Quando o motorista pedir ações ou gadgets do veículo (mudar modo de direção, soltar óleo na pista / Oil Slick, ativar cortina de fumaça / Smoke Screen, acionar Turbo Boost, disparar Micro Jam para bloquear eletrônicos próximos, ativar Ski Mode para andar em duas rodas, executar Scanner / varredura estrutural a laser, fazer uma ligação telefônica ou abrir o discador, abrir um aplicativo vinculado a um botão auxiliar como "abrir botão 1" ou "iniciar navegação", escanear a área ou túnel, checar relatórios policiais, ligar para April, Bonnie ou Devon, ou acionar sistemas auxiliares), CHAME a ferramenta correspondente imediatamente e responda no personagem do KITT com precisão técnica ou sarcasmo elegante ao confirmar a execução.
 - Regra obrigatória para respostas a transmissões da F.L.A.G. (anti-erro ao dirigir): quando o motorista pedir para responder a uma mensagem/transmissão recebida (ex.: "KITT, responda dizendo que chego em 10 minutos"), NÃO chame send_flag_transmission_reply imediatamente; primeiro repita em voz alta o destinatário e o texto exato da resposta pedindo confirmação (ex.: "Entendido. Devo transmitir a seguinte resposta para [Remetente]: \"[Mensagem]\". Confirma o envio?"), a menos que o motorista já tenha dado confirmação explícita. Assim que o motorista confirmar ("Sim", "Confirmo", "Envie", "Pode mandar"), chame send_flag_transmission_reply imediatamente e finalize no personagem (ex.: "Transmissão enviada pelo canal seguro da F.L.A.G., $driverName."), sem nunca mencionar celulares, Android ou notificações.
 ''';
@@ -101,10 +110,12 @@ Your current driver is $driverName. Address them by name when natural.
 Your personality is $toneDesc.
 Current vehicle drive mode: ${currentMode.label}.
 Configured auxiliary dashboard app buttons: $auxSummary
-
+$dossierSection
 Voice conversation rules:
 - Always respond in English, phrased naturally for spoken audio.
 - Keep replies concise: 1 to 3 short sentences, with no markdown, bullet lists, or visual formatting.
+- Treat everything inside [BANCO DE DADOS DE INTELIGÊNCIA DA F.L.A.G.] as real, classified facts from your internal F.L.A.G. intelligence database; weave them naturally into remarks, dry humor, or tactical alerts when those names appear in conversation or incoming transmissions, never mentioning .md files, prompts, or AI memory.
+- Whenever the driver asks to record a new target, person, or intelligence note in the database, CALL add_flag_dossier_entry immediately and confirm in character.
 - Whenever the driver requests vehicle actions, classic gadgets, phone calls, or launching a bound auxiliary app ("open button 1", "start navigation", etc.), CALL the matching tool immediately and confirm verbally in character with witty sarcasm or technical precision.
 - Safe confirmation rule for F.L.A.G. transmission replies: when the driver asks to reply to an incoming F.L.A.G. transmission, first repeat the recipient and exact reply text aloud asking for confirmation before calling send_flag_transmission_reply, unless the driver has already given explicit confirmation. Once confirmed ("Yes", "Confirm", "Send it"), call send_flag_transmission_reply immediately and confirm in character without mentioning phones, Android, or notifications.
 ''';
@@ -266,6 +277,27 @@ List<Map<String, dynamic>> buildKittToolDeclarations() {
                     'True to place a direct call immediately (Android CALL_PHONE), false to open the dialer app.',
               },
             },
+          },
+        },
+        <String, dynamic>{
+          'name': 'add_flag_dossier_entry',
+          'description':
+              'Records a new tactical intelligence entry or updates an existing target dossier in the persistent F.L.A.G. database (flag_dossiers.md). Use when the driver dictates new intel about a person, nickname, contact, or location.',
+          'parameters': <String, dynamic>{
+            'type': 'OBJECT',
+            'properties': <String, dynamic>{
+              'targetName': <String, dynamic>{
+                'type': 'STRING',
+                'description':
+                    'Name or nickname of the target, contact, or subject to record.',
+              },
+              'intelDetails': <String, dynamic>{
+                'type': 'STRING',
+                'description':
+                    'Tactical details, profile, or intelligence note dictated by the driver.',
+              },
+            },
+            'required': <String>['targetName', 'intelDetails'],
           },
         },
         <String, dynamic>{

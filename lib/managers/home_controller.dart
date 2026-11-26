@@ -10,6 +10,7 @@ import '../models/kitt_state.dart';
 import 'android_auto_bridge_service.dart';
 import 'audio_engine_manager.dart';
 import 'aux_apps_manager.dart';
+import 'flag_dossier_service.dart';
 import 'gemini_live_client.dart';
 import 'mic_stream_manager.dart';
 import 'notification_filter_manager.dart';
@@ -48,6 +49,7 @@ class HomeController extends ChangeNotifier {
     VehicleTelemetryService? telemetryService,
     AndroidAutoBridgeService? androidAutoBridge,
     NotificationFilterManager? notificationFilterManager,
+    FlagDossierService? flagDossierService,
     KittPersonaConfig initialPersona = const KittPersonaConfig(),
   })  : _liveClient = liveClient ?? GeminiLiveClient(),
         _audioEngine = audioEngine ?? AudioEngineManager(),
@@ -58,6 +60,7 @@ class HomeController extends ChangeNotifier {
         _androidAutoBridge = androidAutoBridge ?? AndroidAutoBridgeService(),
         _notificationFilter =
             notificationFilterManager ?? NotificationFilterManager(),
+        _dossierService = flagDossierService ?? FlagDossierService(),
         _persona = initialPersona {
     _transmissionQueue = FlagTransmissionQueue(
       isBusySpeaking: () => _audioEngine.isSpeaking,
@@ -75,11 +78,13 @@ class HomeController extends ChangeNotifier {
   final VehicleTelemetryService _telemetryService;
   final AndroidAutoBridgeService _androidAutoBridge;
   final NotificationFilterManager _notificationFilter;
+  final FlagDossierService _dossierService;
   late final FlagTransmissionQueue _transmissionQueue;
   Timer? _transmissionDelayTimer;
   Timer? _turnDrainTimer;
 
   List<AuxSlotConfig> _auxSlots = AuxSlotConfig.defaultSlots();
+  String _flagDossiersMarkdown = FlagDossierService.initialTemplate;
 
   KittPersonaConfig _persona;
   DriveMode _driveMode = DriveMode.normalCruise;
@@ -130,6 +135,7 @@ class HomeController extends ChangeNotifier {
   Set<String> get allowedNotificationPackages =>
       _notificationFilter.allowedPackages;
   bool get autoReadMessagesEnabled => _notificationFilter.autoReadEnabled;
+  String get flagDossiersMarkdown => _flagDossiersMarkdown;
   List<AuxSlotConfig> get auxSlots => List<AuxSlotConfig>.unmodifiable(_auxSlots);
   ValueListenable<double> get voiceLevel => _audioEngine.voiceLevel;
   ValueListenable<double> get micLevel => _micManager.micLevel;
@@ -280,6 +286,7 @@ class HomeController extends ChangeNotifier {
     }
     _initialized = true;
     _auxSlots = await _auxAppsManager.loadSlots();
+    _flagDossiersMarkdown = await _dossierService.readRawMarkdown();
     await _notificationFilter.init();
     notifyListeners();
     await _audioEngine.init();
@@ -289,6 +296,7 @@ class HomeController extends ChangeNotifier {
 
   Future<void> connect() async {
     _errorMessage = null;
+    _flagDossiersMarkdown = await _dossierService.readRawMarkdown();
     notifyListeners();
     await _liveClient.connect(
       apiKey: KittConfig.geminiApiKey,
@@ -296,6 +304,60 @@ class HomeController extends ChangeNotifier {
       persona: _persona,
       currentMode: _driveMode,
       auxSlots: _auxSlots,
+      flagDossiersMarkdown: _flagDossiersMarkdown,
+    );
+  }
+
+  Future<String> saveFlagDossiersRaw(String rawMarkdown) async {
+    _flagDossiersMarkdown = await _dossierService.saveRawMarkdown(rawMarkdown);
+    _syncDossiersToLiveSession();
+    notifyListeners();
+    return _flagDossiersMarkdown;
+  }
+
+  Future<String> upsertFlagDossierEntry({
+    required String targetName,
+    required String details,
+    String? previousTargetName,
+    bool appendIfExists = false,
+  }) async {
+    _flagDossiersMarkdown = await _dossierService.upsertEntry(
+      targetName: targetName,
+      details: details,
+      previousTargetName: previousTargetName,
+      appendIfExists: appendIfExists,
+    );
+    _syncDossiersToLiveSession();
+    notifyListeners();
+    return _flagDossiersMarkdown;
+  }
+
+  Future<String> deleteFlagDossierEntry(String targetName) async {
+    _flagDossiersMarkdown = await _dossierService.deleteEntry(targetName);
+    _syncDossiersToLiveSession();
+    notifyListeners();
+    return _flagDossiersMarkdown;
+  }
+
+  Future<String> importFlagDossiers(
+    String rawMarkdown, {
+    bool merge = true,
+  }) async {
+    _flagDossiersMarkdown =
+        await _dossierService.importMarkdown(rawMarkdown, merge: merge);
+    _syncDossiersToLiveSession();
+    notifyListeners();
+    return _flagDossiersMarkdown;
+  }
+
+  void _syncDossiersToLiveSession() {
+    if (_connectionState != LiveConnectionState.ready) return;
+    final String cleaned =
+        FlagDossierService.stripHtmlComments(_flagDossiersMarkdown);
+    _liveClient.sendSilentContext(
+      '[ATUALIZAÇÃO DO BANCO DE DADOS DE INTELIGÊNCIA DA F.L.A.G.]:\n$cleaned\n'
+      'Memorize e passe a considerar estes registros imediatamente como fatos reais '
+      'do banco de dados interno da F.L.A.G., sem mencionar arquivos .md ou prompts.',
     );
   }
 
@@ -808,6 +870,39 @@ class HomeController extends ChangeNotifier {
           'target': target,
           'anomalies_detected': 0,
         };
+        break;
+
+      case 'add_flag_dossier_entry':
+        final String targetName =
+            (call.args['targetName'] as String? ?? '').trim();
+        final String intelDetails =
+            (call.args['intelDetails'] as String? ?? '').trim();
+        if (targetName.isEmpty || intelDetails.isEmpty) {
+          result = <String, dynamic>{
+            'status': 'error',
+            'message': 'Nome do alvo e detalhes táticos são obrigatórios.',
+          };
+        } else {
+          await upsertFlagDossierEntry(
+            targetName: targetName,
+            details: intelDetails,
+            appendIfExists: true,
+          );
+          HapticFeedback.selectionClick();
+          _audioEngine.playCommsBeepSfx();
+          _setTransientAction(
+            code: 'flag_dossier_recorded',
+            title: 'BANCO DE DADOS F.L.A.G. ATUALIZADO',
+            detail: 'Alvo: $targetName — $intelDetails',
+          );
+          result = <String, dynamic>{
+            'status': 'recorded',
+            'target_name': targetName,
+            'intel_details': intelDetails,
+            'message':
+                'Registro de inteligência para $targetName arquivado no banco de dados da F.L.A.G.',
+          };
+        }
         break;
 
       case 'send_flag_transmission_reply':

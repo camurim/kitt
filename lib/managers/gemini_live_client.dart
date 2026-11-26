@@ -50,6 +50,7 @@ class GeminiLiveClient {
     required KittPersonaConfig persona,
     required DriveMode currentMode,
     List<AuxSlotConfig> auxSlots = const <AuxSlotConfig>[],
+    String flagDossiersMarkdown = '',
   }) async {
     await disconnect();
 
@@ -113,6 +114,7 @@ class GeminiLiveClient {
                 'text': persona.buildSystemInstruction(
                   currentMode,
                   auxSlots: auxSlots,
+                  flagDossiersMarkdown: flagDossiersMarkdown,
                 ),
               },
             ],

@@ -6,6 +6,7 @@ import 'package:kitt_gemini/managers/home_controller.dart';
 import 'package:kitt_gemini/models/aux_slot_config.dart';
 import 'package:kitt_gemini/models/kitt_state.dart';
 import 'package:kitt_gemini/pages/comms_filter_page.dart';
+import 'package:kitt_gemini/pages/flag_dossier_page.dart';
 import 'package:kitt_gemini/pages/home_page.dart';
 import 'package:kitt_gemini/widgets/aux_buttons_bar.dart';
 import 'package:kitt_gemini/widgets/gadget_overlay.dart';
@@ -391,5 +392,67 @@ void main() {
     await tester.pump();
     expect(toggledPkg, 'org.telegram.messenger');
     expect(toggledState, isTrue);
+  });
+
+  testWidgets('FlagDossierPage renders active cards tab and raw markdown terminal tab', (
+    WidgetTester tester,
+  ) async {
+    String? savedRaw;
+    String? upsertedName;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FlagDossierPage(
+          initialMarkdown:
+              '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n\n## Alvo: Devon Miles\n- Diretor da Fundação.\n',
+          onSaveRawMarkdown: (String raw) async {
+            savedRaw = raw;
+            return raw;
+          },
+          onUpsertEntry: ({
+            required String targetName,
+            required String details,
+            String? previousTargetName,
+          }) async {
+            upsertedName = targetName;
+            return '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n\n## Alvo: $targetName\n- $details\n';
+          },
+          onDeleteEntry: (String targetName) async =>
+              '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n',
+          onImportMarkdown: (String raw, {bool merge = true}) async => raw,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('FICHAS ATIVAS'), findsOneWidget);
+    expect(find.text('TERMINAL RAW (.MD)'), findsOneWidget);
+    expect(find.text('ALVO: DEVON MILES'), findsOneWidget);
+
+    // Testa criação de ficha via modal + NOVO REGISTRO
+    await tester.tap(find.byKey(const ValueKey<String>('dossier_new_record_btn')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('dossier_name_field')),
+      'Bigode',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('dossier_details_field')),
+      'Controla o porto.',
+    );
+    await tester.tap(find.text('SALVAR FICHA'));
+    await tester.pumpAndSettle();
+    expect(upsertedName, 'Bigode');
+
+    // Aguarda o SnackBar de confirmação sair da base da tela antes de trocar de aba
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    // Troca para a aba TERMINAL RAW (.MD) e salva
+    await tester.tap(find.text('TERMINAL RAW (.MD)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('dossier_save_sync_btn')));
+    await tester.pumpAndSettle();
+    expect(savedRaw, isNotNull);
   });
 }
