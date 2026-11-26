@@ -1,9 +1,9 @@
-package com.kitt.custom.kitt_gemini.auto
+package net.carlosamorim.kitturbo.auto
 
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.kitt.custom.kitt_gemini.notifications.KittNotificationBridge
+import net.carlosamorim.kitturbo.notifications.KittNotificationBridge
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor

@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.auto
+package net.carlosamorim.kitturbo.auto
 
 import androidx.annotation.DrawableRes
 import androidx.car.app.CarContext
@@ -13,7 +13,7 @@ import androidx.car.app.model.Template
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import com.kitt.custom.kitt_gemini.R
+import net.carlosamorim.kitturbo.R
 
 /**
  * Tela principal do K.I.T.T. no Android Auto baseada em GridTemplate com
@@ -97,7 +97,7 @@ class KittMainScreen(carContext: CarContext) : Screen(carContext) {
             .build()
 
         return GridTemplate.Builder()
-            .setTitle("K.I.T.T. SYSTEM • $statusText")
+            .setTitle("K.i.t.Turbo • $statusText")
             .setHeaderAction(Action.APP_ICON)
             .setSingleList(gridList)
             .build()

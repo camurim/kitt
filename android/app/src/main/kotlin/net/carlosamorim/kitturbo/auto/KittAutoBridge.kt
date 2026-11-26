@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.auto
+package net.carlosamorim.kitturbo.auto
 
 import android.os.Handler
 import android.os.Looper
@@ -18,11 +18,11 @@ data class AutoKittState(
 )
 
 /**
- * Ponte singleton entre o MethodChannel do Flutter (`com.kitt.project/android_auto`)
+ * Ponte singleton entre o MethodChannel do Flutter (`net.carlosamorim.kitturbo/android_auto`)
  * e a interface nativa do Android Auto (`KittMainScreen`).
  */
 object KittAutoBridge {
-    const val CHANNEL_NAME = "com.kitt.project/android_auto"
+    const val CHANNEL_NAME = "net.carlosamorim.kitturbo/android_auto"
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArraySet<() -> Unit>()

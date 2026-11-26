@@ -1,5 +1,5 @@
-name: kitt_gemini
-description: KITT Systems Activated — Flutter app powered by Gemini Live API (native audio-to-audio + Function Calling + real-time PCM Voicebox).
+name: kitturbo
+description: K.i.t.Turbo — Assistente veicular Flutter inspirado no K.I.T.T. com Gemini Live API, Android Auto, telemetria real e controle de voz.
 publish_to: 'none'
 version: 0.1.0+1
 

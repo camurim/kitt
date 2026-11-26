@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini
+package net.carlosamorim.kitturbo
 
 import android.content.Context
 import android.content.Intent
@@ -7,16 +7,16 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import com.kitt.custom.kitt_gemini.auto.KittAutoBridge
-import com.kitt.custom.kitt_gemini.auto.KittEngineManager
-import com.kitt.custom.kitt_gemini.notifications.KittNotificationBridge
+import net.carlosamorim.kitturbo.auto.KittAutoBridge
+import net.carlosamorim.kitturbo.auto.KittEngineManager
+import net.carlosamorim.kitturbo.notifications.KittNotificationBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
-    private val auxAppsChannel = "com.kitt.custom/aux_apps"
+    private val auxAppsChannel = "net.carlosamorim.kitturbo/aux_apps"
 
     override fun provideFlutterEngine(context: Context): FlutterEngine {
         return KittEngineManager.ensureEngine(context)

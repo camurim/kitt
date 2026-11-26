@@ -92,7 +92,7 @@ class _KittDialerSheetState extends State<KittDialerSheet> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'K.I.T.T. COMMLINK • DISCADOR',
+                    'K.i.t.Turbo • COMMLINK DISCADOR',
                     style: TextStyle(
                       color: Color(0xFFFF5252),
                       fontWeight: FontWeight.w900,

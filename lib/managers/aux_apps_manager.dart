@@ -23,7 +23,8 @@ class InstalledAppEntry {
 /// incompatíveis com Android SDK 35+/Kotlin 2.
 class AuxAppsManager {
   static const String _prefsKey = 'kitt_aux_slots_v1';
-  static const MethodChannel _channel = MethodChannel('com.kitt.custom/aux_apps');
+  static const MethodChannel _channel =
+      MethodChannel('net.carlosamorim.kitturbo/aux_apps');
 
   Future<List<AuxSlotConfig>> loadSlots() async {
     try {

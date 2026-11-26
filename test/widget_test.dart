@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kitt_gemini/main.dart';
-import 'package:kitt_gemini/managers/aux_apps_manager.dart';
-import 'package:kitt_gemini/managers/home_controller.dart';
-import 'package:kitt_gemini/models/aux_slot_config.dart';
-import 'package:kitt_gemini/models/kitt_state.dart';
-import 'package:kitt_gemini/pages/comms_filter_page.dart';
-import 'package:kitt_gemini/pages/flag_dossier_page.dart';
-import 'package:kitt_gemini/pages/home_page.dart';
-import 'package:kitt_gemini/widgets/aux_buttons_bar.dart';
-import 'package:kitt_gemini/widgets/gadget_overlay.dart';
-import 'package:kitt_gemini/widgets/gadget_panel.dart';
-import 'package:kitt_gemini/widgets/kitt_dialer_modal.dart';
-import 'package:kitt_gemini/widgets/kitt_scanner_overlay.dart';
-import 'package:kitt_gemini/widgets/kitt_visualizer.dart';
-import 'package:kitt_gemini/widgets/listening_waveform_icon.dart';
-import 'package:kitt_gemini/widgets/side_button.dart';
-import 'package:kitt_gemini/widgets/surveillance_radar.dart';
+import 'package:kitturbo/main.dart';
+import 'package:kitturbo/managers/aux_apps_manager.dart';
+import 'package:kitturbo/managers/home_controller.dart';
+import 'package:kitturbo/models/aux_slot_config.dart';
+import 'package:kitturbo/models/kitt_state.dart';
+import 'package:kitturbo/pages/comms_filter_page.dart';
+import 'package:kitturbo/pages/flag_dossier_page.dart';
+import 'package:kitturbo/pages/home_page.dart';
+import 'package:kitturbo/widgets/aux_buttons_bar.dart';
+import 'package:kitturbo/widgets/gadget_overlay.dart';
+import 'package:kitturbo/widgets/gadget_panel.dart';
+import 'package:kitturbo/widgets/kitt_dialer_modal.dart';
+import 'package:kitturbo/widgets/kitt_scanner_overlay.dart';
+import 'package:kitturbo/widgets/kitt_visualizer.dart';
+import 'package:kitturbo/widgets/listening_waveform_icon.dart';
+import 'package:kitturbo/widgets/side_button.dart';
+import 'package:kitturbo/widgets/surveillance_radar.dart';
 
 void main() {
   testWidgets('KittGeminiApp renders splash screen', (WidgetTester tester) async {
     await tester.pumpWidget(const KittGeminiApp());
 
-    expect(find.text('K.I.T.T.'), findsOneWidget);
+    expect(find.text('K.i.t.Turbo'), findsOneWidget);
     expect(find.text('SYSTEMS ACTIVATED • GEMINI LIVE'), findsOneWidget);
 
     // Desmonta a SplashPage para cancelar o Timer de navegação antes do fim do teste.
@@ -259,9 +259,12 @@ void main() {
     }
 
     await tester.tap(find.text('TOQUE NA TELA PARA ATIVAR O PAINEL'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(woke, isTrue);
     expect(wokeWithMic, isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('ListeningWaveformIcon renders 5 animated bars reacting to mic level', (

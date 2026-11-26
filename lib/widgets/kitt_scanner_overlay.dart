@@ -129,6 +129,7 @@ class _KittScannerOverlayState extends State<KittScannerOverlay>
   Future<void> _dismiss({required bool activateMic}) async {
     if (_exiting) return;
     _exiting = true;
+    _sweepController.stop();
     HapticFeedback.lightImpact();
 
     if (_audioPlaying) {
@@ -183,7 +184,7 @@ class _KittScannerOverlayState extends State<KittScannerOverlay>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
                       const Text(
-                        'K.I.T.T. • STAND-BY SCANNER',
+                        'K.i.t.Turbo • STAND-BY SCANNER',
                         style: TextStyle(
                           fontFamily: 'monospace',
                           color: Color(0xFF8E2428),

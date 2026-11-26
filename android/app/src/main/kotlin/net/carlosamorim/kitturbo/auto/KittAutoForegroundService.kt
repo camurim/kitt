@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.auto
+package net.carlosamorim.kitturbo.auto
 
 import android.Manifest
 import android.app.Notification
@@ -14,7 +14,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.kitt.custom.kitt_gemini.R
+import net.carlosamorim.kitturbo.R
 
 /**
  * Foreground Service leve mantido ativo enquanto o celular está conectado ao
@@ -72,7 +72,7 @@ class KittAutoForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "K.I.T.T. Android Auto",
+                "K.i.t.Turbo • Android Auto",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = "Mantém a sessão Gemini Live e os comandos do K.I.T.T. ativos no Android Auto."
@@ -86,7 +86,7 @@ class KittAutoForegroundService : Service() {
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("K.I.T.T. Systems Activated")
+            .setContentTitle("K.i.t.Turbo • Systems Activated")
             .setContentText("Conectado ao Android Auto • Gemini Live ativo")
             .setOngoing(true)
             .setSilent(true)
@@ -97,8 +97,8 @@ class KittAutoForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "kitt_auto_session"
         private const val NOTIFICATION_ID = 1982
-        private const val ACTION_START = "com.kitt.custom.kitt_gemini.auto.START"
-        private const val ACTION_STOP = "com.kitt.custom.kitt_gemini.auto.STOP"
+        private const val ACTION_START = "net.carlosamorim.kitturbo.auto.START"
+        private const val ACTION_STOP = "net.carlosamorim.kitturbo.auto.STOP"
 
         fun start(context: Context) {
             val intent = Intent(context, KittAutoForegroundService::class.java).apply {

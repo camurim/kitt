@@ -93,13 +93,13 @@ class FlagTransmissionQueue {
 }
 
 /// Gerencia o filtro seletivo de notificações (F.L.A.G.) via MethodChannel nativo
-/// (`com.kitt.project/notifications`) e persistência local (`shared_preferences`).
+/// (`net.carlosamorim.kitturbo/notifications`) e persistência local (`shared_preferences`).
 class NotificationFilterManager {
   NotificationFilterManager({
     MethodChannel? channel,
   }) : _channel = channel ?? const MethodChannel(channelName);
 
-  static const String channelName = 'com.kitt.project/notifications';
+  static const String channelName = 'net.carlosamorim.kitturbo/notifications';
   static const String _allowedPackagesKey = 'kitt_flag_allowed_packages_v1';
   static const String _autoReadEnabledKey = 'kitt_flag_auto_read_enabled_v1';
 

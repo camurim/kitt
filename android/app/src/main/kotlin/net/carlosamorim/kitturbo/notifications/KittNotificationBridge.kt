@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.notifications
+package net.carlosamorim.kitturbo.notifications
 
 import android.app.PendingIntent
 import android.app.RemoteInput
@@ -15,10 +15,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Ponte singleton entre o [KittNotificationListenerService] nativo e o Flutter
- * via MethodChannel (`com.kitt.project/notifications`).
+ * via MethodChannel (`net.carlosamorim.kitturbo/notifications`).
  */
 object KittNotificationBridge {
-    const val CHANNEL_NAME = "com.kitt.project/notifications"
+    const val CHANNEL_NAME = "net.carlosamorim.kitturbo/notifications"
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val allowedPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()

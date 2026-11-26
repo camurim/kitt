@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.auto
+package net.carlosamorim.kitturbo.auto
 
 import android.content.Intent
 import androidx.car.app.CarAppService

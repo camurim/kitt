@@ -1,4 +1,4 @@
-package com.kitt.custom.kitt_gemini.notifications
+package net.carlosamorim.kitturbo.notifications
 
 import android.app.Notification
 import android.app.PendingIntent

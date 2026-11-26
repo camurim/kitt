@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 import '../models/kitt_state.dart';
 
-/// Ponte Flutter ↔ Android Auto via MethodChannel (`com.kitt.project/android_auto`).
+/// Ponte Flutter ↔ Android Auto via MethodChannel (`net.carlosamorim.kitturbo/android_auto`).
 ///
 /// Escuta comandos disparados na tela do carro (`KittMainScreen`) e sincroniza
 /// o estado/subtítulo dinâmico do K.I.T.T. de volta para o Android Auto sempre
@@ -12,7 +12,7 @@ class AndroidAutoBridgeService {
     MethodChannel? channel,
   }) : _channel = channel ?? const MethodChannel(channelName);
 
-  static const String channelName = 'com.kitt.project/android_auto';
+  static const String channelName = 'net.carlosamorim.kitturbo/android_auto';
 
   final MethodChannel _channel;
   Future<void> Function(String command)? _onCommand;

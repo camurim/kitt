@@ -51,12 +51,12 @@ class _SplashPageState extends State<SplashPage>
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               const Text(
-                'K.I.T.T.',
+                'K.i.t.Turbo',
                 style: TextStyle(
                   color: Color(0xFFFF2424),
-                  fontSize: 44,
+                  fontSize: 40,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 10,
+                  letterSpacing: 6,
                 ),
               ),
               const SizedBox(height: 10),

@@ -30,7 +30,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application
-        android:label="K.I.T.T. Gemini"
+        android:label="K.i.t.Turbo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -79,7 +79,7 @@
 
         <service
             android:name=".notifications.KittNotificationListenerService"
-            android:label="K.I.T.T. • Filtro F.L.A.G."
+            android:label="K.i.t.Turbo • Filtro F.L.A.G."
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

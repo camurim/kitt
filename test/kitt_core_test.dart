@@ -2,16 +2,16 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kitt_gemini/config/kitt_persona.dart';
-import 'package:kitt_gemini/managers/android_auto_bridge_service.dart';
-import 'package:kitt_gemini/managers/audio_engine_manager.dart';
-import 'package:kitt_gemini/managers/aux_apps_manager.dart';
-import 'package:kitt_gemini/managers/flag_dossier_service.dart';
-import 'package:kitt_gemini/managers/notification_filter_manager.dart';
-import 'package:kitt_gemini/managers/phone_call_manager.dart';
-import 'package:kitt_gemini/managers/vehicle_telemetry_service.dart';
-import 'package:kitt_gemini/models/aux_slot_config.dart';
-import 'package:kitt_gemini/models/kitt_state.dart';
+import 'package:kitturbo/config/kitt_persona.dart';
+import 'package:kitturbo/managers/android_auto_bridge_service.dart';
+import 'package:kitturbo/managers/audio_engine_manager.dart';
+import 'package:kitturbo/managers/aux_apps_manager.dart';
+import 'package:kitturbo/managers/flag_dossier_service.dart';
+import 'package:kitturbo/managers/notification_filter_manager.dart';
+import 'package:kitturbo/managers/phone_call_manager.dart';
+import 'package:kitturbo/managers/vehicle_telemetry_service.dart';
+import 'package:kitturbo/models/aux_slot_config.dart';
+import 'package:kitturbo/models/kitt_state.dart';
 
 void main() {
   group('KittPersonaConfig', () {

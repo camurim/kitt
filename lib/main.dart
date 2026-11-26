@@ -28,7 +28,7 @@ class KittGeminiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'K.I.T.T. Gemini',
+      title: 'K.i.t.Turbo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF050507),
