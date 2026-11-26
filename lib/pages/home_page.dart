@@ -370,7 +370,9 @@ class _HomePageState extends State<HomePage>
           children: <Widget>[
             SizedBox(
               width: isWide ? 140 : 94,
-              child: _buildLeftColumn(),
+              child: SingleChildScrollView(
+                child: _buildLeftColumn(),
+              ),
             ),
             Expanded(
               child: Center(
@@ -429,7 +431,9 @@ class _HomePageState extends State<HomePage>
             ),
             SizedBox(
               width: isWide ? 140 : 94,
-              child: _buildRightColumn(),
+              child: SingleChildScrollView(
+                child: _buildRightColumn(),
+              ),
             ),
           ],
         );

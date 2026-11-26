@@ -197,8 +197,9 @@ class HomeController extends ChangeNotifier {
 
   Future<void> initAndConnect() async {
     if (_initialized) {
-      // Já inicializado (ex.: motor headless do Android Auto) — apenas ressincroniza estado.
-      notifyListeners();
+      // Já inicializado (ex.: motor headless do Android Auto) — ressincroniza
+      // apenas o Android Auto sem disparar notifyListeners() durante initState/build.
+      _syncAndroidAutoState();
       return;
     }
     _initialized = true;
@@ -832,14 +833,18 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  @override
-  void notifyListeners() {
+  void _syncAndroidAutoState() {
     _androidAutoBridge.syncState(
       connectionState: _connectionState,
       driveMode: _driveMode,
       isMicActive: _isMicActive,
       activeGadget: _activeGadget,
     );
+  }
+
+  @override
+  void notifyListeners() {
+    _syncAndroidAutoState();
     super.notifyListeners();
   }
 
