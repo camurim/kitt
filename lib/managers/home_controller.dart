@@ -103,6 +103,12 @@ class HomeController extends ChangeNotifier {
   double _rpmNormalized = 0.22; // 0.0..1.0 (0..10.000 RPM)
   int _speedMph = 55;
 
+  // Proteção anti-repetição / anti-cacofonia de botões do painel
+  String? _activeDashboardButton;
+  Timer? _dashboardButtonTimer;
+  bool _micToggleBusy = false;
+  final Map<String, DateTime> _buttonLockUntil = <String, DateTime>{};
+
   final List<StreamSubscription<dynamic>> _subs =
       <StreamSubscription<dynamic>>[];
 
@@ -115,6 +121,18 @@ class HomeController extends ChangeNotifier {
   KittActionEvent? get activeAction => _activeAction;
   GadgetType? get activeGadget => _activeGadget;
   int get gadgetRunId => _gadgetRunId;
+  bool isDashboardButtonActive(String code) =>
+      _activeDashboardButton == code.toLowerCase();
+
+  bool _isLocked(String key) {
+    final DateTime? until = _buttonLockUntil[key];
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  void _lockButton(String key, Duration duration) {
+    _buttonLockUntil[key] = DateTime.now().add(duration);
+  }
   double get rpmNormalized => _rpmNormalized;
   int get rpmValue => (_rpmNormalized * 10000).round();
   int get speedMph => _speedMph;
@@ -367,29 +385,36 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> toggleMic() async {
-    if (_isMicActive) {
-      await stopMic();
-      return;
-    }
+    if (_micToggleBusy || _isLocked('mic_toggle')) return;
+    _micToggleBusy = true;
+    _lockButton('mic_toggle', const Duration(milliseconds: 450));
+    try {
+      if (_isMicActive) {
+        await stopMic();
+        return;
+      }
 
-    if (_connectionState != LiveConnectionState.ready) {
-      await connect();
-      if (_connectionState == LiveConnectionState.error) return;
-    }
+      if (_connectionState != LiveConnectionState.ready) {
+        await connect();
+        if (_connectionState == LiveConnectionState.error) return;
+      }
 
-    await _audioEngine.acquireListeningFocus();
-    final bool started = await _micManager.startStreaming(
-      _liveClient.sendPcmAudioChunk,
-    );
-    if (!started) {
-      _audioEngine.releaseListeningFocus();
-      _errorMessage = 'Permissão de microfone negada.';
+      await _audioEngine.acquireListeningFocus();
+      final bool started = await _micManager.startStreaming(
+        _liveClient.sendPcmAudioChunk,
+      );
+      if (!started) {
+        _audioEngine.releaseListeningFocus();
+        _errorMessage = 'Permissão de microfone negada.';
+        notifyListeners();
+        return;
+      }
+      _isMicActive = true;
+      _errorMessage = null;
       notifyListeners();
-      return;
+    } finally {
+      _micToggleBusy = false;
     }
-    _isMicActive = true;
-    _errorMessage = null;
-    notifyListeners();
   }
 
   Future<void> stopMic() async {
@@ -402,6 +427,9 @@ class HomeController extends ChangeNotifier {
   }
 
   void setOperationMode(DriveMode mode, {bool announceToGemini = false}) {
+    // Evita reacionamento consecutivo do modo já ativo (previne cacofonia/estado inconsistente)
+    if (_driveMode == mode) return;
+
     _driveMode = mode;
     _applyBaselineTelemetry();
     _audioEngine.playSfxAsset('audio/${mode.apiValue}.mp3');
@@ -459,6 +487,14 @@ class HomeController extends ChangeNotifier {
     GadgetType gadget, {
     bool announceToGemini = true,
   }) {
+    // Ignora toques sucessivos no mesmo gadget enquanto ele já está em execução
+    if (_activeGadget == gadget) {
+      return <String, dynamic>{
+        'status': 'already_active',
+        'gadget': gadget.toolName,
+      };
+    }
+
     _gadgetTimer?.cancel();
     _telemetryTimer?.cancel();
 
@@ -631,6 +667,20 @@ class HomeController extends ChangeNotifier {
       activateGadget(GadgetType.oilSlick);
       return;
     }
+    // Bloqueia toques repetidos no mesmo botão auxiliar enquanto ativo/em cooldown
+    if (_activeDashboardButton == lower || _isLocked('dash_$lower')) {
+      return;
+    }
+    _activeDashboardButton = lower;
+    _lockButton('dash_$lower', const Duration(seconds: 4));
+    _dashboardButtonTimer?.cancel();
+    _dashboardButtonTimer = Timer(const Duration(seconds: 4), () {
+      if (_activeDashboardButton == lower) {
+        _activeDashboardButton = null;
+        notifyListeners();
+      }
+    });
+
     _audioEngine.playSfxAsset('audio/$lower.mp3');
     _setTransientAction(
       code: lower,
@@ -642,6 +692,7 @@ class HomeController extends ChangeNotifier {
         'O motorista acionou o botão auxiliar ${code.toUpperCase()} no painel. Responda brevemente como KITT.',
       );
     }
+    notifyListeners();
   }
 
   void sendQuickTextPrompt(String prompt) {
@@ -712,6 +763,15 @@ class HomeController extends ChangeNotifier {
         'message': msg,
       };
     }
+
+    final String auxLockKey = 'aux_${slot.slotNumber}';
+    if (_isLocked(auxLockKey)) {
+      return <String, dynamic>{
+        'status': 'already_launching',
+        'slot_number': slot.slotNumber,
+      };
+    }
+    _lockButton(auxLockKey, const Duration(seconds: 3));
 
     HapticFeedback.mediumImpact();
     _audioEngine.playSfxAsset('audio/aux_launch.mp3');
@@ -1073,6 +1133,7 @@ class HomeController extends ChangeNotifier {
     _actionClearTimer?.cancel();
     _gadgetTimer?.cancel();
     _telemetryTimer?.cancel();
+    _dashboardButtonTimer?.cancel();
     for (final StreamSubscription<dynamic> sub in _subs) {
       sub.cancel();
     }
