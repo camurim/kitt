@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:kitt_gemini/config/kitt_persona.dart';
 import 'package:kitt_gemini/managers/android_auto_bridge_service.dart';
 import 'package:kitt_gemini/managers/audio_engine_manager.dart';
 import 'package:kitt_gemini/managers/aux_apps_manager.dart';
+import 'package:kitt_gemini/managers/flag_dossier_service.dart';
 import 'package:kitt_gemini/managers/notification_filter_manager.dart';
 import 'package:kitt_gemini/managers/phone_call_manager.dart';
 import 'package:kitt_gemini/managers/vehicle_telemetry_service.dart';
@@ -20,12 +22,17 @@ void main() {
         sarcasmLevel: 0.8,
       );
 
-      final String prompt = persona.buildSystemInstruction(DriveMode.pursuit);
+      final String prompt = persona.buildSystemInstruction(
+        DriveMode.pursuit,
+        flagDossiersMarkdown: '# ARQUIVOS CONFIDENCIAIS F.L.A.G.\n\n## Alvo: Bigode\n- Controla o porto.',
+      );
       expect(prompt, contains('Carlos'));
       expect(prompt, contains('PURSUIT'));
       expect(prompt, contains('Português do Brasil'));
       expect(prompt, contains('send_flag_transmission_reply'));
       expect(prompt, contains('Confirma o envio?'));
+      expect(prompt, contains('[BANCO DE DADOS DE INTELIGÊNCIA DA F.L.A.G.]'));
+      expect(prompt, contains('Bigode'));
     });
 
     test('exposes all expected Gemini Live function declarations', () {
@@ -49,6 +56,7 @@ void main() {
           'run_structural_scan',
           'launch_aux_app',
           'make_phone_call',
+          'add_flag_dossier_entry',
           'send_flag_transmission_reply',
           'scan_environment',
           'call_contact',
@@ -425,6 +433,47 @@ void main() {
       expect(queue.pendingCount, 0);
 
       queue.clear();
+    });
+  });
+
+  group('FlagDossierService (Persistent Markdown Database)', () {
+    test('initializes flag_dossiers.md, upserts, appends, parses and deletes entries', () async {
+      final Directory tmpDir =
+          await Directory.systemTemp.createTemp('kitt_flag_dossiers_test_');
+      addTearDown(() async {
+        if (await tmpDir.exists()) {
+          await tmpDir.delete(recursive: true);
+        }
+      });
+
+      final FlagDossierService svc = FlagDossierService(
+        directoryProvider: () async => tmpDir,
+      );
+
+      final String initial = await svc.readRawMarkdown();
+      expect(initial, contains('# ARQUIVOS CONFIDENCIAIS F.L.A.G.'));
+      expect(FlagDossierService.parseEntries(initial), isEmpty);
+
+      await svc.upsertEntry(
+        targetName: 'Bigode',
+        details: 'Controla o porto.',
+      );
+      await svc.upsertEntry(
+        targetName: 'Bigode',
+        details: 'Usa um sedã preto blindado.',
+        appendIfExists: true,
+      );
+
+      final String afterUpsert = await svc.readRawMarkdown();
+      final List<FlagDossierEntry> entries =
+          FlagDossierService.parseEntries(afterUpsert);
+      expect(entries.length, 1);
+      expect(entries.first.targetName, 'Bigode');
+      expect(entries.first.details, contains('Controla o porto.'));
+      expect(entries.first.details, contains('sedã preto blindado'));
+
+      final String afterDelete = await svc.deleteEntry('Bigode');
+      expect(FlagDossierService.parseEntries(afterDelete), isEmpty);
     });
   });
 }

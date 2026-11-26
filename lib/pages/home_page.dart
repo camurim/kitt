@@ -17,6 +17,7 @@ import '../widgets/side_button.dart';
 import '../widgets/surveillance_radar.dart';
 import 'aux_slot_config_page.dart';
 import 'comms_filter_page.dart';
+import 'flag_dossier_page.dart';
 
 /// Painel principal do KITT (retrato e paisagem) integrado à Gemini Live API.
 class HomePage extends StatefulWidget {
@@ -287,6 +288,15 @@ class _HomePageState extends State<HomePage>
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Dossiês / Database F.L.A.G.',
+          onPressed: _openFlagDossiersPage,
+          icon: const Icon(
+            Icons.folder_special_outlined,
+            color: Color(0xFFFFB300),
+            size: 20,
           ),
         ),
         IconButton(
@@ -797,6 +807,29 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  Future<void> _openFlagDossiersPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => FlagDossierPage(
+          initialMarkdown: _controller.flagDossiersMarkdown,
+          onSaveRawMarkdown: _controller.saveFlagDossiersRaw,
+          onUpsertEntry: ({
+            required String targetName,
+            required String details,
+            String? previousTargetName,
+          }) =>
+              _controller.upsertFlagDossierEntry(
+            targetName: targetName,
+            details: details,
+            previousTargetName: previousTargetName,
+          ),
+          onDeleteEntry: _controller.deleteFlagDossierEntry,
+          onImportMarkdown: _controller.importFlagDossiers,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openDialerModal() async {
     await showKittDialerModal(
       context: context,
@@ -958,6 +991,22 @@ class _HomePageState extends State<HomePage>
                     onChanged: (double v) => setModalState(() => sarcasm = v),
                   ),
                   const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFFD54F),
+                        side: const BorderSide(color: Color(0xFFFFB300)),
+                      ),
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _openFlagDossiersPage();
+                      },
+                      icon: const Icon(Icons.folder_special_outlined, size: 18),
+                      label: const Text('DOSSIÊS / DATABASE F.L.A.G.'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
