@@ -18,6 +18,7 @@ import '../widgets/surveillance_radar.dart';
 import 'aux_slot_config_page.dart';
 import 'comms_filter_page.dart';
 import 'flag_dossier_page.dart';
+import 'flag_missions_page.dart';
 
 /// Painel principal do KITT (retrato e paisagem) integrado à Gemini Live API.
 class HomePage extends StatefulWidget {
@@ -52,11 +53,13 @@ class _HomePageState extends State<HomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _setWakelock(true);
+      _setWakelock(_controller.keepScreenOn);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      _controller.setAppForeground(true);
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _setWakelock(false);
+      _controller.setAppForeground(false);
     }
   }
 
@@ -281,12 +284,14 @@ class _HomePageState extends State<HomePage>
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            '${_controller.connectionState.label} • ${_controller.persona.driverName.toUpperCase()}',
+            _controller.connectionState.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFFD0D0DC),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
             ),
           ),
         ),
@@ -838,6 +843,27 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+  Future<void> _openFlagMissionsPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => FlagMissionsPage(
+          initialEnabled: _controller.missionsEnabled,
+          initialSelectedCalendarIds: _controller.missionSelectedCalendarIds,
+          initialRequireTag: _controller.missionsRequireTag,
+          initialTag: _controller.missionsTag,
+          hasPermission: _controller.hasCalendarPermission,
+          requestPermission: _controller.requestCalendarPermission,
+          loadCalendars: _controller.listDeviceCalendars,
+          onToggleEnabled: _controller.setMissionsEnabled,
+          onToggleCalendar: _controller.setMissionCalendarSelected,
+          onToggleRequireTag: _controller.setMissionsRequireTag,
+          onChangeTag: _controller.setMissionsTag,
+          onForceBriefingNow: _controller.forceMissionBriefingNow,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openDialerModal() async {
     await showKittDialerModal(
       context: context,
@@ -998,6 +1024,49 @@ class _HomePageState extends State<HomePage>
                     activeColor: const Color(0xFFFF2424),
                     onChanged: (double v) => setModalState(() => sarcasm = v),
                   ),
+                  const SizedBox(height: 6),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF181822),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF2D2D3B)),
+                    ),
+                    child: SwitchListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 2,
+                      ),
+                      activeThumbColor: const Color(0xFFFF2424),
+                      activeTrackColor: const Color(0x66FF2424),
+                      secondary: Icon(
+                        _controller.keepScreenOn
+                            ? Icons.light_mode
+                            : Icons.bedtime_outlined,
+                        color: _controller.keepScreenOn
+                            ? const Color(0xFFFFD54F)
+                            : Colors.white38,
+                        size: 20,
+                      ),
+                      title: const Text(
+                        'Manter tela sempre ligada',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Impede o visor de apagar no suporte do carro',
+                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                      value: _controller.keepScreenOn,
+                      onChanged: (bool v) async {
+                        await _controller.setKeepScreenOn(v);
+                        setModalState(() {});
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -1012,6 +1081,22 @@ class _HomePageState extends State<HomePage>
                       },
                       icon: const Icon(Icons.folder_special_outlined, size: 18),
                       label: const Text('DOSSIÊS / DATABASE F.L.A.G.'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF00E5FF),
+                        side: const BorderSide(color: Color(0xAA00E5FF)),
+                      ),
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _openFlagMissionsPage();
+                      },
+                      icon: const Icon(Icons.event_note_outlined, size: 18),
+                      label: const Text('MISSÕES / CALENDÁRIO F.L.A.G.'),
                     ),
                   ),
                   const SizedBox(height: 10),

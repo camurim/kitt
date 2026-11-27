@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../config/kitt_persona.dart';
 import '../models/aux_slot_config.dart';
@@ -11,6 +13,7 @@ import 'android_auto_bridge_service.dart';
 import 'audio_engine_manager.dart';
 import 'aux_apps_manager.dart';
 import 'flag_dossier_service.dart';
+import 'flag_mission_service.dart';
 import 'gemini_live_client.dart';
 import 'kitt_backup_service.dart';
 import 'mic_stream_manager.dart';
@@ -51,6 +54,7 @@ class HomeController extends ChangeNotifier {
     AndroidAutoBridgeService? androidAutoBridge,
     NotificationFilterManager? notificationFilterManager,
     FlagDossierService? flagDossierService,
+    FlagMissionService? flagMissionService,
     KittBackupService? backupService,
     KittPersonaConfig initialPersona = const KittPersonaConfig(),
   })  : _liveClient = liveClient ?? GeminiLiveClient(),
@@ -63,6 +67,7 @@ class HomeController extends ChangeNotifier {
         _notificationFilter =
             notificationFilterManager ?? NotificationFilterManager(),
         _dossierService = flagDossierService ?? FlagDossierService(),
+        _missionService = flagMissionService ?? FlagMissionService(),
         _backupService = backupService ??
             KittBackupService(dossierService: flagDossierService),
         _persona = initialPersona {
@@ -83,7 +88,10 @@ class HomeController extends ChangeNotifier {
   final AndroidAutoBridgeService _androidAutoBridge;
   final NotificationFilterManager _notificationFilter;
   final FlagDossierService _dossierService;
+  final FlagMissionService _missionService;
   final KittBackupService _backupService;
+  Timer? _missionProximityTimer;
+  bool _initialBriefingDoneThisSession = false;
   late final FlagTransmissionQueue _transmissionQueue;
   Timer? _transmissionDelayTimer;
   Timer? _turnDrainTimer;
@@ -114,6 +122,10 @@ class HomeController extends ChangeNotifier {
   bool _micToggleBusy = false;
   final Map<String, DateTime> _buttonLockUntil = <String, DateTime>{};
 
+  // Preferência persistida de tela sempre ligada (Wakelock)
+  static const String keepScreenOnPrefKey = 'kitt_keep_screen_on';
+  bool _keepScreenOn = true;
+
   final List<StreamSubscription<dynamic>> _subs =
       <StreamSubscription<dynamic>>[];
 
@@ -126,6 +138,12 @@ class HomeController extends ChangeNotifier {
   KittActionEvent? get activeAction => _activeAction;
   GadgetType? get activeGadget => _activeGadget;
   int get gadgetRunId => _gadgetRunId;
+  bool get keepScreenOn => _keepScreenOn;
+  bool get missionsEnabled => _missionService.enabled;
+  Set<String> get missionSelectedCalendarIds =>
+      _missionService.selectedCalendarIds;
+  bool get missionsRequireTag => _missionService.requireTag;
+  String get missionsTag => _missionService.tag;
   bool isDashboardButtonActive(String code) =>
       _activeDashboardButton == code.toLowerCase();
 
@@ -169,6 +187,13 @@ class HomeController extends ChangeNotifier {
         _connectionState = state;
         if (state == LiveConnectionState.ready) {
           _errorMessage = null;
+          _liveClient.sendSilentContext(
+            '[SINCRONIZAÇÃO TEMPORAL]: ${FlagMissionService.buildCurrentDateTimeContext()}',
+          );
+          if (!_initialBriefingDoneThisSession) {
+            _initialBriefingDoneThisSession = true;
+            _runInitialMissionBriefing();
+          }
         }
         notifyListeners();
       }),
@@ -310,11 +335,165 @@ class HomeController extends ChangeNotifier {
     _initialized = true;
     _auxSlots = await _auxAppsManager.loadSlots();
     _flagDossiersMarkdown = await _dossierService.readRawMarkdown();
+    await _loadKeepScreenOnPref();
+    await _missionService.init();
+    _startMissionProximityMonitor();
     await _notificationFilter.init();
     notifyListeners();
     await _audioEngine.init();
     await _telemetryService.start();
     await connect();
+  }
+
+  void _startMissionProximityMonitor() {
+    _missionProximityTimer?.cancel();
+    _missionProximityTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _checkUpcomingMissions(),
+    );
+  }
+
+  Future<void> _runInitialMissionBriefing() async {
+    if (!_missionService.enabled ||
+        _connectionState != LiveConnectionState.ready) {
+      return;
+    }
+    final List<FlagMissionItem> pending =
+        await _missionService.getMissionsForBriefing();
+    if (pending.isEmpty) return;
+
+    await _missionService.markBriefed(pending);
+    _setTransientAction(
+      code: 'flag_missions_briefing',
+      title: 'DIRETRIZES F.L.A.G. • ${pending.length} MISSÃO(ÕES)',
+      detail: pending.map((FlagMissionItem m) => '${m.formattedTime} ${m.cleanTitle}').join(' | '),
+    );
+    _liveClient.sendTextMessage(
+      FlagMissionService.buildInitialBriefingPrompt(pending),
+    );
+  }
+
+  Future<void> _checkUpcomingMissions() async {
+    if (!_missionService.enabled) return;
+    final DateTime now = DateTime.now();
+    final List<FlagMissionItem> due =
+        await _missionService.getDueUpcomingMissions(now: now);
+    if (due.isEmpty) return;
+
+    for (final FlagMissionItem mission in due) {
+      await _missionService.markUpcoming(mission);
+      final int mins = mission.startTime.difference(now).inMinutes;
+      HapticFeedback.heavyImpact();
+      _audioEngine.playCommsBeepSfx();
+      _setTransientAction(
+        code: 'flag_mission_upcoming_${mission.eventId}',
+        title: 'ALERTA F.L.A.G. • EM ${mins.clamp(0, 15)} MIN',
+        detail: '${mission.formattedTime} • ${mission.cleanTitle}',
+      );
+      if (_connectionState == LiveConnectionState.ready) {
+        _liveClient.sendTextMessage(
+          FlagMissionService.buildUpcomingAlertPrompt(mission, mins),
+        );
+      }
+    }
+  }
+
+  /// Força o briefing imediato ignorando a trava `_briefed` uma única vez (botão de teste).
+  Future<int> forceMissionBriefingNow() async {
+    final List<FlagMissionItem> missions =
+        await _missionService.getMissionsForBriefing(ignoreBriefedLock: true);
+    if (missions.isEmpty) {
+      _setTransientAction(
+        code: 'flag_missions_empty',
+        title: 'DIRETRIZES F.L.A.G.',
+        detail: 'Nenhuma missão encontrada nas agendas selecionadas para as próximas 24h.',
+      );
+      return 0;
+    }
+
+    HapticFeedback.mediumImpact();
+    _audioEngine.playCommsBeepSfx();
+    _setTransientAction(
+      code: 'flag_missions_forced',
+      title: 'BRIEFING F.L.A.G. • ${missions.length} MISSÃO(ÕES)',
+      detail: missions.map((FlagMissionItem m) => '${m.formattedTime} ${m.cleanTitle}').join(' | '),
+    );
+
+    if (_connectionState == LiveConnectionState.ready) {
+      _liveClient.sendTextMessage(
+        FlagMissionService.buildInitialBriefingPrompt(missions),
+      );
+    }
+    return missions.length;
+  }
+
+  Future<bool> hasCalendarPermission() =>
+      _missionService.hasCalendarPermission();
+
+  Future<bool> requestCalendarPermission() =>
+      _missionService.requestCalendarPermission();
+
+  Future<List<CalendarAccountInfo>> listDeviceCalendars() =>
+      _missionService.listDeviceCalendars();
+
+  Future<void> setMissionsEnabled(bool enabled) async {
+    await _missionService.setEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> setMissionCalendarSelected(
+    String calendarId,
+    bool selected,
+  ) async {
+    await _missionService.setCalendarSelected(calendarId, selected);
+    notifyListeners();
+  }
+
+  Future<void> setMissionsRequireTag(bool requireTag) async {
+    await _missionService.setRequireTag(requireTag);
+    notifyListeners();
+  }
+
+  Future<void> setMissionsTag(String tag) async {
+    await _missionService.setTag(tag);
+    notifyListeners();
+  }
+
+  Future<void> _loadKeepScreenOnPref() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      _keepScreenOn = prefs.getBool(keepScreenOnPrefKey) ?? true;
+    } catch (_) {
+      _keepScreenOn = true;
+    }
+    await _applyWakelock(_keepScreenOn);
+  }
+
+  Future<void> setKeepScreenOn(bool enabled) async {
+    if (_keepScreenOn == enabled) return;
+    _keepScreenOn = enabled;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(keepScreenOnPrefKey, enabled);
+    } catch (_) {}
+    await _applyWakelock(enabled);
+    HapticFeedback.selectionClick();
+    _setTransientAction(
+      code: 'keep_screen_on',
+      title: enabled ? 'MONITOR SEMPRE LIGADO: ATIVO' : 'MONITOR SEMPRE LIGADO: OFF',
+      detail: enabled
+          ? 'A tela permanecerá acesa enquanto o K.i.t.Turbo estiver aberto.'
+          : 'O sistema voltará a respeitar o tempo limite de tela do Android.',
+    );
+    notifyListeners();
+  }
+
+  Future<void> _applyWakelock(bool enable) async {
+    try {
+      await WakelockPlus.toggle(enable: enable);
+    } catch (_) {
+      // Ignora em testes unitários sem canal nativo.
+    }
   }
 
   Future<void> connect() async {
@@ -396,6 +575,8 @@ class HomeController extends ChangeNotifier {
     _flagDossiersMarkdown = result.restoredMarkdown;
     if (result.isFullJsonBackup) {
       _auxSlots = await _auxAppsManager.loadSlots();
+      await _loadKeepScreenOnPref();
+      await _missionService.init();
       await _notificationFilter.init();
     }
 
@@ -437,6 +618,17 @@ class HomeController extends ChangeNotifier {
   Future<void> disconnect() async {
     await stopMic();
     await _liveClient.disconnect();
+  }
+
+  /// Controla a reconexão automática conforme o app está em primeiro plano
+  /// (economiza bateria/conexões quando minimizado e reconecta ao voltar).
+  Future<void> setAppForeground(bool inForeground) async {
+    _liveClient.setAutoReconnectEnabled(inForeground);
+    if (inForeground &&
+        _initialized &&
+        _connectionState == LiveConnectionState.disconnected) {
+      await connect();
+    }
   }
 
   Future<void> toggleMic() async {
@@ -954,6 +1146,44 @@ class HomeController extends ChangeNotifier {
         );
         break;
 
+      case 'schedule_flag_mission':
+        final String title = (call.args['title'] as String? ?? '').trim();
+        final String startIso =
+            (call.args['start_iso'] as String? ?? '').trim();
+        final DateTime? parsedStart = DateTime.tryParse(startIso);
+        if (title.isEmpty || parsedStart == null) {
+          result = <String, dynamic>{
+            'status': 'error',
+            'message':
+                'Parâmetros inválidos: informe título e data/hora em ISO-8601 (ex.: 2026-11-28T15:00:00).',
+          };
+          break;
+        }
+        final int durationMin =
+            (call.args['duration_minutes'] as num?)?.toInt() ?? 60;
+        final MissionCreateResult created =
+            await _missionService.createMissionEvent(
+          title: title,
+          startTime: parsedStart,
+          durationMinutes: durationMin,
+          description: call.args['description'] as String?,
+          recurrenceType: call.args['recurrence'] as String?,
+        );
+        if (created.success) {
+          HapticFeedback.mediumImpact();
+          _audioEngine.playTransmissionSentBeepSfx();
+          final DateTime localStart = parsedStart.toLocal();
+          final String hh = localStart.hour.toString().padLeft(2, '0');
+          final String mm = localStart.minute.toString().padLeft(2, '0');
+          _setTransientAction(
+            code: 'mission_logged_${created.eventId}',
+            title: MissionCreateResult.hudConfirmation,
+            detail: '$hh:$mm • ${created.cleanTitle}',
+          );
+        }
+        result = created.toToolResponse();
+        break;
+
       case 'launch_aux_app':
         final num? rawSlot = call.args['slotNumber'] as num?;
         result = await launchAuxApp(
@@ -1189,6 +1419,7 @@ class HomeController extends ChangeNotifier {
     _gadgetTimer?.cancel();
     _telemetryTimer?.cancel();
     _dashboardButtonTimer?.cancel();
+    _missionProximityTimer?.cancel();
     for (final StreamSubscription<dynamic> sub in _subs) {
       sub.cancel();
     }

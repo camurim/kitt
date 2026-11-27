@@ -7,6 +7,8 @@ import 'package:kitturbo/managers/android_auto_bridge_service.dart';
 import 'package:kitturbo/managers/audio_engine_manager.dart';
 import 'package:kitturbo/managers/aux_apps_manager.dart';
 import 'package:kitturbo/managers/flag_dossier_service.dart';
+import 'package:kitturbo/managers/flag_mission_service.dart';
+import 'package:kitturbo/managers/gemini_live_client.dart';
 import 'package:kitturbo/managers/kitt_backup_service.dart';
 import 'package:kitturbo/managers/notification_filter_manager.dart';
 import 'package:kitturbo/managers/phone_call_manager.dart';
@@ -525,6 +527,139 @@ void main() {
       expect(mdRes.isFullJsonBackup, isFalse);
       expect(mdRes.restoredPrefsCount, 0);
       expect(await dossierSvc.readRawMarkdown(), contains('Bonnie'));
+    });
+  });
+
+  group('GeminiLiveClient auto-reconnect policy', () {
+    test('uses exponential backoff capped at 30 seconds', () {
+      expect(GeminiLiveClient.computeBackoffDelay(0), const Duration(seconds: 2));
+      expect(GeminiLiveClient.computeBackoffDelay(1), const Duration(seconds: 4));
+      expect(GeminiLiveClient.computeBackoffDelay(2), const Duration(seconds: 8));
+      expect(GeminiLiveClient.computeBackoffDelay(3), const Duration(seconds: 16));
+      expect(GeminiLiveClient.computeBackoffDelay(4), const Duration(seconds: 30));
+      expect(GeminiLiveClient.computeBackoffDelay(6), const Duration(seconds: 30));
+    });
+
+    test('blocks auto-reconnect on auth/policy errors but allows idle timeouts', () {
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(1000, ''), isFalse);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(1001, 'Going away'), isFalse);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(1006, null), isFalse);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(1008, 'Policy violation'), isTrue);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(1007, 'Invalid payload'), isTrue);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(null, 'API key not valid'), isTrue);
+      expect(GeminiLiveClient.isNonRecoverableCloseCode(null, 'Quota exceeded'), isTrue);
+    });
+  });
+
+  group('FlagMissionService', () {
+    test('applies hybrid tag filter and cleans tag for natural speech', () {
+      // Tag desativada: qualquer evento passa
+      expect(
+        FlagMissionService.matchesHybridFilter(
+          title: 'Reunião de Diretoria',
+          requireTag: false,
+          tag: '#flag',
+        ),
+        isTrue,
+      );
+
+      // Tag ativada: exige #flag (case-insensitive) no título ou descrição
+      expect(
+        FlagMissionService.matchesHybridFilter(
+          title: 'Reunião de Diretoria',
+          description: 'Assunto comum',
+          requireTag: true,
+          tag: '#flag',
+        ),
+        isFalse,
+      );
+      expect(
+        FlagMissionService.matchesHybridFilter(
+          title: 'Interceptar comboio #FLAG',
+          requireTag: true,
+          tag: '#flag',
+        ),
+        isTrue,
+      );
+      expect(
+        FlagMissionService.matchesHybridFilter(
+          title: 'Encontro com Devon',
+          description: 'Prioridade máxima #Flag',
+          requireTag: true,
+          tag: '#flag',
+        ),
+        isTrue,
+      );
+
+      // Limpeza da tag para narração natural
+      expect(
+        FlagMissionService.cleanTitleForSpeech('Interceptar comboio #FLAG', '#flag'),
+        'Interceptar comboio',
+      );
+      expect(
+        FlagMissionService.cleanTitleForSpeech('#flag - Reunião com Bonnie', '#flag'),
+        'Reunião com Bonnie',
+      );
+    });
+
+    test('detects 15-minute proximity window and formats dedup keys', () {
+      final DateTime now = DateTime(2026, 11, 27, 9, 0);
+      final DateTime in10Min = DateTime(2026, 11, 27, 9, 10);
+      final DateTime in25Min = DateTime(2026, 11, 27, 9, 25);
+
+      expect(FlagMissionService.isWithinProximityWindow(in10Min, now), isTrue);
+      expect(FlagMissionService.isWithinProximityWindow(in25Min, now), isFalse);
+
+      final FlagMissionItem item = FlagMissionItem(
+        eventId: 'ev42',
+        rawTitle: 'Briefing #flag',
+        cleanTitle: 'Briefing',
+        description: '',
+        startTime: in10Min,
+        calendarId: 'cal1',
+        calendarName: 'Trabalho',
+      );
+      expect(item.briefedKey, 'ev42_${in10Min.millisecondsSinceEpoch}_briefed');
+      expect(item.upcomingKey, 'ev42_${in10Min.millisecondsSinceEpoch}_upcoming');
+    });
+
+    test('formats storage title with hybrid tag, parses recurrence and date-time context', () {
+      expect(
+        FlagMissionService.formatTitleForStorage(
+          'Reunião com Devon',
+          requireTag: true,
+          tag: '#flag',
+        ),
+        'Reunião com Devon #flag',
+      );
+      expect(
+        FlagMissionService.formatTitleForStorage(
+          'Reunião #FLAG',
+          requireTag: true,
+          tag: '#flag',
+        ),
+        'Reunião #FLAG',
+      );
+      expect(
+        FlagMissionService.formatTitleForStorage(
+          'Reunião com Devon',
+          requireTag: false,
+          tag: '#flag',
+        ),
+        'Reunião com Devon',
+      );
+
+      expect(FlagMissionService.parseRecurrenceRule('DAILY'), isNotNull);
+      expect(FlagMissionService.parseRecurrenceRule('WEEKLY'), isNotNull);
+      expect(FlagMissionService.parseRecurrenceRule('MONTHLY'), isNotNull);
+      expect(FlagMissionService.parseRecurrenceRule('NONE'), isNull);
+
+      final String dtCtx = FlagMissionService.buildCurrentDateTimeContext(
+        DateTime(2026, 11, 27, 7, 51),
+      );
+      expect(dtCtx, contains('Sexta-feira'));
+      expect(dtCtx, contains('27/11/2026'));
+      expect(dtCtx, contains('2026-11-27T07:51:00'));
     });
   });
 }

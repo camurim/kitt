@@ -54,4 +54,22 @@ object KittEngineManager {
                 ?.appIsResumed()
         }
     }
+
+    /**
+     * Destrói o FlutterEngine compartilhado durante o encerramento permanente do app.
+     */
+    @Synchronized
+    fun destroyEngine() {
+        val cache = FlutterEngineCache.getInstance()
+        val engine = cache.get(ENGINE_ID)
+        cache.remove(ENGINE_ID)
+        if (engine != null) {
+            mainHandler.post {
+                try {
+                    engine.destroy()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
 }

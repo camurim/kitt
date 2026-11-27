@@ -48,9 +48,9 @@ enum LiveConnectionState {
 
   String get label => switch (this) {
         LiveConnectionState.disconnected => 'OFFLINE',
-        LiveConnectionState.connecting => 'CONNECTING...',
-        LiveConnectionState.ready => 'ONLINE • GEMINI LIVE',
-        LiveConnectionState.error => 'LINK ERROR',
+        LiveConnectionState.connecting => 'CONECTANDO',
+        LiveConnectionState.ready => 'ONLINE',
+        LiveConnectionState.error => 'OFFLINE',
       };
 }
 

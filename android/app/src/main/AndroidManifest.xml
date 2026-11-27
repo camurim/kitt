@@ -9,6 +9,10 @@
     <!-- Commlink / Chamadas telefônicas diretas -->
     <uses-permission android:name="android.permission.CALL_PHONE"/>
 
+    <!-- Diretrizes e Missões F.L.A.G. (leitura do calendário — WRITE_CALENDAR exigido internamente pelo device_calendar no hasPermissions) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+
     <!-- Telemetria real (velocímetro GPS) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -23,6 +27,7 @@
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- Recursos opcionais para manter compatibilidade com tablets/emuladores -->
     <uses-feature android:name="android.hardware.telephony" android:required="false"/>

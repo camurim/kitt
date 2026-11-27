@@ -1,22 +1,80 @@
 package net.carlosamorim.kitturbo
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import net.carlosamorim.kitturbo.auto.KittAutoBridge
-import net.carlosamorim.kitturbo.auto.KittEngineManager
-import net.carlosamorim.kitturbo.notifications.KittNotificationBridge
+import android.os.Build
+import android.os.Bundle
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import net.carlosamorim.kitturbo.auto.KittAutoBridge
+import net.carlosamorim.kitturbo.auto.KittAutoForegroundService
+import net.carlosamorim.kitturbo.auto.KittEngineManager
+import net.carlosamorim.kitturbo.notifications.KittNotificationBridge
 import java.io.ByteArrayOutputStream
+import java.lang.ref.WeakReference
 
 class MainActivity : FlutterActivity() {
     private val auxAppsChannel = "net.carlosamorim.kitturbo/aux_apps"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        currentActivity = WeakReference(this)
+        requestNotificationPermissionIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        currentActivity = WeakReference(this)
+        // Ao voltar para a tela do app, oculta a notificação de "segundo plano"
+        if (KittAutoForegroundService.isBackgroundOnly()) {
+            KittAutoForegroundService.stop(applicationContext)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Quando o app vai para segundo plano (Home ou Voltar) e não está encerrando
+        // permanentemente, exibe a notificação persistente com o botão "ENCERRAR".
+        if (!isChangingConfigurations && !KittAutoForegroundService.isShuttingDown) {
+            KittAutoForegroundService.start(
+                applicationContext,
+                mode = KittAutoForegroundService.MODE_BACKGROUND,
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        if (currentActivity?.get() === this) {
+            currentActivity = null
+        }
+        super.onDestroy()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    REQ_POST_NOTIFICATIONS,
+                )
+            }
+        }
+    }
 
     override fun provideFlutterEngine(context: Context): FlutterEngine {
         return KittEngineManager.ensureEngine(context)
@@ -24,7 +82,7 @@ class MainActivity : FlutterActivity() {
 
     override fun shouldDestroyEngineWithHost(): Boolean {
         // Preserva o FlutterEngine compartilhado quando a tela do celular apaga ou
-        // a Activity é fechada, mantendo a sessão Android Auto / Gemini Live ativa.
+        // a Activity é fechada, mantendo a sessão Android Auto / segundo plano ativa.
         return false
     }
 
@@ -130,5 +188,24 @@ class MainActivity : FlutterActivity() {
         val out = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 85, out)
         return out.toByteArray()
+    }
+
+    companion object {
+        private const val REQ_POST_NOTIFICATIONS = 2082
+
+        @Volatile
+        private var currentActivity: WeakReference<MainActivity>? = null
+
+        fun finishIfActive() {
+            currentActivity?.get()?.let { activity ->
+                activity.runOnUiThread {
+                    try {
+                        activity.finishAndRemoveTask()
+                    } catch (_: Exception) {
+                        activity.finish()
+                    }
+                }
+            }
+        }
     }
 }
